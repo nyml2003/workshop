@@ -1,7 +1,7 @@
 """workc installer — one-line setup, no cargo required.
 
 Usage (online):
-  python3 -c "$(curl -fsSL https://raw.githubusercontent.com/nyml2003/workshop/main/scripts/install.py)"
+  python3 -c "$(curl -fsSL https://raw.githubusercontent.com/nyml2003/workshop/master/scripts/install.py)"
 
 Usage (offline, from release zip):
   unzip workc-macos-arm64.zip && python3 install.py
