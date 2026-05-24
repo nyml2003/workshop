@@ -129,8 +129,8 @@ cargo make ci            # fmt → lint → smoke 一键通过后再 commit
 ### 发布
 
 ```powershell
-git tag v0.1.0
-git push origin v0.1.0   # 触发 GitHub Actions，构建 4 平台 release
+python scripts/release.py 0.1.0    # 更新 Cargo.toml 版本 + commit + tag
+git push origin master v0.1.0      # 推送后 GitHub Actions 自动构建 4 平台 release
 ```
 
 ### 构建 & 运行
