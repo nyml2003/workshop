@@ -21,7 +21,7 @@ Makefile.toml          # cargo-make 任务定义
 
 ```
 # 在线一行安装
-python3 -c "$(curl -fsSL https://raw.githubusercontent.com/nyml2003/workshop/master/scripts/install.py)"
+curl -fsSL https://raw.githubusercontent.com/nyml2003/workshop/master/scripts/install.py | python3
 
 # 离线（从 Release zip 解压后）
 python3 install.py
@@ -29,7 +29,7 @@ python3 install.py
 
 脚本从 GitHub Releases 下载预编译二进制，安装到 `~/.workc/bin/`，不依赖 Rust 工具链。
 
-卸载：`python3 -c "$(curl -fsSL https://raw.githubusercontent.com/nyml2003/workshop/master/scripts/uninstall.py)"`
+卸载：`curl -fsSL https://raw.githubusercontent.com/nyml2003/workshop/master/scripts/uninstall.py | python3`
 
 ## 发布新版本
 
@@ -156,3 +156,4 @@ cargo run -p workc-cli -- <args>          # Debug 运行
 - Shell：PowerShell 7+（`pwsh`）
 - Makefile.toml 路径用 camelCase；`cargo make` 参数中的反斜杠可能需要转义
 - `WindowsEditorLauncher` 使用 `cmd /c start`——`open` 会弹出新窗口
+

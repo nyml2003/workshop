@@ -71,10 +71,10 @@ jobs:
           echo "" >> body.md
           echo '```' >> body.md
           echo "# 在线安装" >> body.md
-          echo "python3 -c \"\$(curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/scripts/install.py)\"" >> body.md
+          echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/scripts/install.py | python3" >> body.md
           echo "" >> body.md
           echo "# 卸载" >> body.md
-          echo "python3 -c \"\$(curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/scripts/uninstall.py)\"" >> body.md
+          echo "curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/master/scripts/uninstall.py | python3" >> body.md
           echo '```' >> body.md
       - uses: softprops/action-gh-release@v1
         with:
@@ -84,4 +84,5 @@ jobs:
             workc-macos-arm64.zip/workc-macos-arm64.zip
             workc-linux-x64.zip/workc-linux-x64.zip
             workc-windows-x64.zip/workc-windows-x64.zip
+
 
