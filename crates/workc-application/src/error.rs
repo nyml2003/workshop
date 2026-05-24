@@ -8,10 +8,7 @@ pub enum ApplicationError {
     Domain(DomainError),
     InvalidRequest(String),
     AdapterUnavailable(&'static str),
-    ExternalFailure {
-        port: &'static str,
-        detail: String,
-    },
+    ExternalFailure { port: &'static str, detail: String },
 }
 
 impl Display for ApplicationError {
@@ -20,7 +17,9 @@ impl Display for ApplicationError {
             Self::Domain(error) => Display::fmt(error, f),
             Self::InvalidRequest(message) => write!(f, "invalid request: {message}"),
             Self::AdapterUnavailable(port) => write!(f, "adapter unavailable: {port}"),
-            Self::ExternalFailure { port, detail } => write!(f, "external failure on {port}: {detail}"),
+            Self::ExternalFailure { port, detail } => {
+                write!(f, "external failure on {port}: {detail}")
+            }
         }
     }
 }

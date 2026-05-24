@@ -4,7 +4,9 @@ use std::fmt::{Display, Formatter};
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::Serialize;
 use workc_domain::shared::Timestamp;
-use workc_domain::skill_registry::entities::{PrepareResult, PrepareStep, SkillExecutionStatus, UseResult, UseStep};
+use workc_domain::skill_registry::entities::{
+    PrepareResult, PrepareStep, SkillExecutionStatus, UseResult, UseStep,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum CloneState {
@@ -94,7 +96,14 @@ pub trait EditorLauncher {
 }
 
 pub trait SkillRuntime {
-    fn prepare(&self, mount_path: &Utf8Path, step: PrepareStep) -> Result<PrepareResult, RuntimeError>;
+    fn prepare(
+        &self,
+        mount_path: &Utf8Path,
+        step: PrepareStep,
+    ) -> Result<PrepareResult, RuntimeError>;
     fn use_skill(&self, mount_path: &Utf8Path, step: UseStep) -> Result<UseResult, RuntimeError>;
-    fn check_prepare_status(&self, mount_path: &Utf8Path) -> Result<PrepareStatusRecord, RuntimeError>;
+    fn check_prepare_status(
+        &self,
+        mount_path: &Utf8Path,
+    ) -> Result<PrepareStatusRecord, RuntimeError>;
 }

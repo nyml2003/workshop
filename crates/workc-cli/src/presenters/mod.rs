@@ -39,7 +39,12 @@ impl Presenter for TextPresenter {
     }
 
     fn render_task_created(&self, result: &CreateTaskResult) -> String {
-        text::render_task_created(&result.task_id, &result.slug, &result.title, &result.template)
+        text::render_task_created(
+            &result.task_id,
+            &result.slug,
+            &result.title,
+            &result.template,
+        )
     }
 
     fn render_task_opened(&self, task_ref: &str, editor: &str) -> String {

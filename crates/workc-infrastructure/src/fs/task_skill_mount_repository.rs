@@ -87,7 +87,7 @@ impl TaskSkillMountRepository for FsTaskSkillMountRepository {
                             return Err(DomainError::InvalidInput {
                                 field: "mount status",
                                 reason: format!("unknown mount status: {other}"),
-                            })
+                            });
                         }
                     },
                     path: mount.path.into(),
@@ -96,7 +96,11 @@ impl TaskSkillMountRepository for FsTaskSkillMountRepository {
             .collect()
     }
 
-    fn save_for_task(&self, task_id: &TaskId, mounts: &[TaskSkillMount]) -> Result<(), DomainError> {
+    fn save_for_task(
+        &self,
+        task_id: &TaskId,
+        mounts: &[TaskSkillMount],
+    ) -> Result<(), DomainError> {
         let path = self.mounts_path(task_id);
         let parent = path.parent().ok_or(DomainError::InvalidInput {
             field: "mount path",

@@ -1,6 +1,8 @@
 use camino::Utf8PathBuf;
 
-use crate::shared::{MountId, RepoGroupId, RepoId, SkillId, SkillSourceId, SkillVersion, TaskId, TaskSlug, Timestamp};
+use crate::shared::{
+    MountId, RepoGroupId, RepoId, SkillId, SkillSourceId, SkillVersion, TaskId, TaskSlug, Timestamp,
+};
 
 use super::value_objects::{TaskSkillMountStatus, TaskStatus};
 
@@ -185,7 +187,9 @@ mod tests {
             None,
             vec![],
         );
-        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "template"));
+        assert!(
+            matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "template")
+        );
     }
 
     #[test]

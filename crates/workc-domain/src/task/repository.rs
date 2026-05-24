@@ -13,6 +13,7 @@ pub trait TaskRepository {
 
 pub trait TaskSkillMountRepository {
     fn list_for_task(&self, task_id: &TaskId) -> Result<Vec<TaskSkillMount>, DomainError>;
-    fn save_for_task(&self, task_id: &TaskId, mounts: &[TaskSkillMount]) -> Result<(), DomainError>;
+    fn save_for_task(&self, task_id: &TaskId, mounts: &[TaskSkillMount])
+    -> Result<(), DomainError>;
     fn remove_for_task(&self, task_id: &TaskId, mount_id: &MountId) -> Result<(), DomainError>;
 }

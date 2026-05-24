@@ -1,15 +1,17 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
 use workc_application::repo_catalog::{
-    AddRepoCommand, AddRepoGroupCommand, DefaultRepoCatalogApplicationService, RepoCatalogApplicationService,
+    AddRepoCommand, AddRepoGroupCommand, DefaultRepoCatalogApplicationService,
+    RepoCatalogApplicationService,
 };
 use workc_application::task_repos::{
-    AddTaskReposCommand, CloneStateFilter, CloneTaskReposCommand, DefaultTaskReposApplicationService, RemoveTaskReposCommand,
-    RepoStatusQuery, SetTaskReposCommand, TaskReposApplicationService,
+    AddTaskReposCommand, CloneStateFilter, CloneTaskReposCommand,
+    DefaultTaskReposApplicationService, RemoveTaskReposCommand, RepoStatusQuery,
+    SetTaskReposCommand, TaskReposApplicationService,
 };
-use workc_infrastructure::git::command_git_client::CommandGitClient;
 use workc_infrastructure::fs::{FsRepoCatalogRepository, FsTaskRepository};
+use workc_infrastructure::git::command_git_client::CommandGitClient;
 use workc_infrastructure::time::system_clock::SystemClock;
 
 use crate::presenters::Presenter;

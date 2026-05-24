@@ -41,5 +41,10 @@ pub trait RepoSelectionResolver {
 }
 
 pub trait TaskActivityPolicy {
-    fn apply(&self, activity: &TaskActivity, event: TaskActivityEvent, occurred_at: Timestamp) -> TaskActivity;
+    fn apply(
+        &self,
+        activity: &TaskActivity,
+        event: TaskActivityEvent,
+        occurred_at: Timestamp,
+    ) -> TaskActivity;
 }

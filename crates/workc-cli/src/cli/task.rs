@@ -1,24 +1,24 @@
-use anyhow::{anyhow, Result};
-use camino::Utf8PathBuf;
-use clap::{Args, Parser, Subcommand, ValueEnum};
 use super::knowledge::KnowledgeCommand;
 use super::skill::SkillCommand;
+use anyhow::{Result, anyhow};
+use camino::Utf8PathBuf;
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use workc_application::ports::EditorKind;
 use workc_application::task::{
-    ApplicationTaskStatus, CloseTaskCommand, CreateTaskCommand, DefaultTaskApplicationService, ListTasksQuery, OpenTaskCommand,
-    TaskApplicationService, TaskRef,
+    ApplicationTaskStatus, CloseTaskCommand, CreateTaskCommand, DefaultTaskApplicationService,
+    ListTasksQuery, OpenTaskCommand, TaskApplicationService, TaskRef,
 };
 use workc_application::task_skills::{MountSkillCommand, TaskSkillsApplicationService};
-#[cfg(target_os = "windows")]
-use workc_infrastructure::editor::windows::WindowsEditorLauncher;
 #[cfg(target_os = "macos")]
 use workc_infrastructure::editor::macos::MacOsEditorLauncher;
+#[cfg(target_os = "windows")]
+use workc_infrastructure::editor::windows::WindowsEditorLauncher;
 use workc_infrastructure::fs::task_repository::{DefaultTaskIdGenerator, FsTaskRepository};
 use workc_infrastructure::fs::{FsSkillRegistryRepository, FsTaskSkillMountRepository};
 use workc_infrastructure::time::system_clock::SystemClock;
 
-use crate::presenters::{self, Presenter};
 use super::repo::{RepoCommand, RepoGroupCommand, TaskReposCommand};
+use crate::presenters::{self, Presenter};
 
 #[derive(Parser, Debug)]
 #[command(name = "workc")]
@@ -230,13 +230,14 @@ pub fn run() -> Result<String> {
 
                 if !command.skills.is_empty() {
                     let workspace_root = workspace_root()?;
-                    let skill_service = workc_application::task_skills::DefaultTaskSkillsApplicationService::new(
-                        Box::new(FsTaskRepository::new(workspace_root.clone())),
-                        Box::new(FsTaskSkillMountRepository::new(workspace_root.clone())),
-                        Box::new(FsSkillRegistryRepository::new(workspace_root)),
-                        Box::new(SystemClock),
-                        None,
-                    );
+                    let skill_service =
+                        workc_application::task_skills::DefaultTaskSkillsApplicationService::new(
+                            Box::new(FsTaskRepository::new(workspace_root.clone())),
+                            Box::new(FsTaskSkillMountRepository::new(workspace_root.clone())),
+                            Box::new(FsSkillRegistryRepository::new(workspace_root)),
+                            Box::new(SystemClock),
+                            None,
+                        );
                     for skill_id in &command.skills {
                         skill_service.mount_skill(MountSkillCommand {
                             task_id: result.task_id.clone(),
@@ -254,7 +255,9 @@ pub fn run() -> Result<String> {
                 })?;
                 Ok(presenter.render_message("Closed task"))
             }
-            TaskSubcommand::Repos { command } => super::repo::run_task_repos(command, presenter.as_ref()),
+            TaskSubcommand::Repos { command } => {
+                super::repo::run_task_repos(command, presenter.as_ref())
+            }
         },
     }
 }

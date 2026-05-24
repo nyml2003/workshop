@@ -9,7 +9,10 @@ use super::dtos::{AddRepoCommand, AddRepoGroupCommand, RepoGroupSummary, RepoSum
 pub trait RepoCatalogApplicationService {
     fn add_repo(&self, command: AddRepoCommand) -> Result<RepoSummary, ApplicationError>;
     fn list_repos(&self) -> Result<Vec<RepoSummary>, ApplicationError>;
-    fn add_repo_group(&self, command: AddRepoGroupCommand) -> Result<RepoGroupSummary, ApplicationError>;
+    fn add_repo_group(
+        &self,
+        command: AddRepoGroupCommand,
+    ) -> Result<RepoGroupSummary, ApplicationError>;
     fn list_repo_groups(&self) -> Result<Vec<RepoGroupSummary>, ApplicationError>;
 }
 
@@ -73,7 +76,10 @@ impl RepoCatalogApplicationService for DefaultRepoCatalogApplicationService {
             .collect())
     }
 
-    fn add_repo_group(&self, command: AddRepoGroupCommand) -> Result<RepoGroupSummary, ApplicationError> {
+    fn add_repo_group(
+        &self,
+        command: AddRepoGroupCommand,
+    ) -> Result<RepoGroupSummary, ApplicationError> {
         let group_id = RepoGroupId::from(command.id.as_str());
 
         if command.repos.is_empty() {
@@ -90,7 +96,11 @@ impl RepoCatalogApplicationService for DefaultRepoCatalogApplicationService {
             }));
         }
 
-        let repo_ids: Vec<RepoId> = command.repos.iter().map(|repo| RepoId::from(repo.as_str())).collect();
+        let repo_ids: Vec<RepoId> = command
+            .repos
+            .iter()
+            .map(|repo| RepoId::from(repo.as_str()))
+            .collect();
         for repo_id in &repo_ids {
             if !catalog.repos.iter().any(|repo| repo.id == *repo_id) {
                 return Err(ApplicationError::Domain(DomainError::NotFound {
@@ -111,7 +121,11 @@ impl RepoCatalogApplicationService for DefaultRepoCatalogApplicationService {
 
         Ok(RepoGroupSummary {
             id: group.id.to_string(),
-            repos: group.repos.into_iter().map(|repo| repo.to_string()).collect(),
+            repos: group
+                .repos
+                .into_iter()
+                .map(|repo| repo.to_string())
+                .collect(),
             tags: group.tags,
             description: group.description,
         })
@@ -125,7 +139,11 @@ impl RepoCatalogApplicationService for DefaultRepoCatalogApplicationService {
             .into_iter()
             .map(|group| RepoGroupSummary {
                 id: group.id.to_string(),
-                repos: group.repos.into_iter().map(|repo| repo.to_string()).collect(),
+                repos: group
+                    .repos
+                    .into_iter()
+                    .map(|repo| repo.to_string())
+                    .collect(),
                 tags: group.tags,
                 description: group.description,
             })
@@ -167,17 +185,31 @@ mod tests {
         }
 
         fn find_repo(&self, id: &RepoId) -> Result<Option<RepoEntry>, DomainError> {
-            Ok(self.catalog.borrow().repos.iter().find(|repo| repo.id == *id).cloned())
+            Ok(self
+                .catalog
+                .borrow()
+                .repos
+                .iter()
+                .find(|repo| repo.id == *id)
+                .cloned())
         }
 
         fn find_group(&self, id: &RepoGroupId) -> Result<Option<RepoGroup>, DomainError> {
-            Ok(self.catalog.borrow().groups.iter().find(|group| group.id == *id).cloned())
+            Ok(self
+                .catalog
+                .borrow()
+                .groups
+                .iter()
+                .find(|group| group.id == *id)
+                .cloned())
         }
     }
 
     #[test]
     fn add_repo_persists_and_lists() {
-        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(
+            InMemoryRepoCatalogRepository::default(),
+        ));
 
         let repo = service
             .add_repo(AddRepoCommand {
@@ -194,7 +226,9 @@ mod tests {
 
     #[test]
     fn add_repo_group_requires_existing_repos() {
-        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(
+            InMemoryRepoCatalogRepository::default(),
+        ));
         let result = service.add_repo_group(AddRepoGroupCommand {
             id: "auth-core".to_owned(),
             repos: vec!["auth-service".to_owned()],
@@ -202,12 +236,16 @@ mod tests {
             description: None,
         });
 
-        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo"));
+        assert!(
+            matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo")
+        );
     }
 
     #[test]
     fn add_repo_rejects_duplicate() {
-        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(
+            InMemoryRepoCatalogRepository::default(),
+        ));
         service
             .add_repo(AddRepoCommand {
                 id: "auth-service".to_owned(),
@@ -223,12 +261,16 @@ mod tests {
             tags: vec![],
             description: None,
         });
-        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "repo"));
+        assert!(
+            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "repo")
+        );
     }
 
     #[test]
     fn add_repo_rejects_empty_url() {
-        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(
+            InMemoryRepoCatalogRepository::default(),
+        ));
         let result = service.add_repo(AddRepoCommand {
             id: "auth-service".to_owned(),
             url: "   ".to_owned(),
@@ -240,7 +282,9 @@ mod tests {
 
     #[test]
     fn add_repo_group_creates_successfully_when_repos_exist() {
-        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(
+            InMemoryRepoCatalogRepository::default(),
+        ));
         service
             .add_repo(AddRepoCommand {
                 id: "auth-service".to_owned(),
@@ -265,7 +309,9 @@ mod tests {
 
     #[test]
     fn add_repo_group_rejects_empty_repos_list() {
-        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(
+            InMemoryRepoCatalogRepository::default(),
+        ));
         let result = service.add_repo_group(AddRepoGroupCommand {
             id: "auth-core".to_owned(),
             repos: vec![],
@@ -277,7 +323,9 @@ mod tests {
 
     #[test]
     fn list_repos_sorts_alphabetically() {
-        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(
+            InMemoryRepoCatalogRepository::default(),
+        ));
         service
             .add_repo(AddRepoCommand {
                 id: "zulu".to_owned(),
@@ -303,7 +351,9 @@ mod tests {
 
     #[test]
     fn list_repo_groups_sorts_alphabetically() {
-        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(
+            InMemoryRepoCatalogRepository::default(),
+        ));
         service
             .add_repo(AddRepoCommand {
                 id: "auth-service".to_owned(),

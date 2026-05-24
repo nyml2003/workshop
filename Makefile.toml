@@ -1,0 +1,78 @@
+[config]
+default_to_workspace = false
+
+[tasks.build-release]
+description = "Build release binary"
+command = "cargo"
+args = ["build", "--release", "-p", "workc-cli"]
+
+[tasks.build]
+description = "Build debug binary"
+command = "cargo"
+args = ["build", "-p", "workc-cli"]
+
+[tasks.check]
+description = "Check all crates compile"
+command = "cargo"
+args = ["check", "--workspace"]
+
+[tasks.fmt]
+description = "Check code formatting"
+command = "cargo"
+args = ["fmt", "--all", "--", "--check"]
+
+[tasks.lint]
+description = "Run clippy with warnings as errors"
+command = "cargo"
+args = ["clippy", "--all-targets", "--", "-D", "warnings"]
+
+[tasks.clean]
+description = "Clean build artifacts"
+command = "cargo"
+args = ["clean"]
+
+[tasks.smoke-cli]
+description = "CLI smoke test — all commands, JSON output, known rejections"
+dependencies = ["build-release"]
+args = ["scripts/smoke_test.py", "--cli-only"]
+
+[tasks.smoke-cli.windows]
+command = "python"
+
+[tasks.smoke-cli.linux]
+command = "python3"
+
+[tasks.smoke-cli.mac]
+command = "python3"
+
+[tasks.smoke-infra]
+description = "Infra smoke test — filesystem artifacts, TOML content, persistence"
+dependencies = ["build-release"]
+args = ["scripts/smoke_test.py", "--infra-only"]
+
+[tasks.smoke-infra.windows]
+command = "python"
+
+[tasks.smoke-infra.linux]
+command = "python3"
+
+[tasks.smoke-infra.mac]
+command = "python3"
+
+[tasks.smoke]
+description = "Run all smoke tests (CLI + infra)"
+dependencies = ["build-release"]
+args = ["scripts/smoke_test.py"]
+
+[tasks.smoke.windows]
+command = "python"
+
+[tasks.smoke.linux]
+command = "python3"
+
+[tasks.smoke.mac]
+command = "python3"
+
+[tasks.ci]
+description = "CI pipeline: format check -> lint -> smoke"
+dependencies = ["fmt", "lint", "smoke"]

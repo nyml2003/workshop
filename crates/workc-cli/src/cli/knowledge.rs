@@ -1,10 +1,12 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
 use workc_application::knowledge::{
-    CreateKnowledgeCandidateCommand, DefaultKnowledgeApplicationService, DeleteKnowledgeCandidateCommand, DeleteKnowledgeCommand,
-    KnowledgeApplicationService, ListKnowledgeCandidatesQuery, ListKnowledgeQuery, PromoteKnowledgeCommand, ShowKnowledgeCandidateQuery,
-    ShowKnowledgeQuery, UpdateKnowledgeCandidateMetaCommand, UpdateKnowledgeMetaCommand,
+    CreateKnowledgeCandidateCommand, DefaultKnowledgeApplicationService,
+    DeleteKnowledgeCandidateCommand, DeleteKnowledgeCommand, KnowledgeApplicationService,
+    ListKnowledgeCandidatesQuery, ListKnowledgeQuery, PromoteKnowledgeCommand,
+    ShowKnowledgeCandidateQuery, ShowKnowledgeQuery, UpdateKnowledgeCandidateMetaCommand,
+    UpdateKnowledgeMetaCommand,
 };
 use workc_infrastructure::fs::knowledge_repository::FsKnowledgeRepository;
 use workc_infrastructure::time::system_clock::SystemClock;
@@ -140,7 +142,9 @@ pub fn run(command: KnowledgeCommand, presenter: &dyn Presenter) -> Result<Strin
                 Ok(presenter.render_knowledge_detail(&result.candidate))
             }
             KnowledgeCandidateCommand::List(args) => {
-                let items = service.list_candidates(ListKnowledgeCandidatesQuery { task_id: args.task_id })?;
+                let items = service.list_candidates(ListKnowledgeCandidatesQuery {
+                    task_id: args.task_id,
+                })?;
                 Ok(presenter.render_knowledge_list(&items))
             }
             KnowledgeCandidateCommand::Show(args) => {
@@ -153,13 +157,14 @@ pub fn run(command: KnowledgeCommand, presenter: &dyn Presenter) -> Result<Strin
                     .unwrap_or_else(|| presenter.render_message("Knowledge candidate not found.")))
             }
             KnowledgeCandidateCommand::UpdateMeta(args) => {
-                let result = service.update_candidate_meta(UpdateKnowledgeCandidateMetaCommand {
-                    task_id: args.task_id,
-                    candidate_id: args.candidate_id,
-                    title: args.title,
-                    category: args.category,
-                    tags: args.tags,
-                })?;
+                let result =
+                    service.update_candidate_meta(UpdateKnowledgeCandidateMetaCommand {
+                        task_id: args.task_id,
+                        candidate_id: args.candidate_id,
+                        title: args.title,
+                        category: args.category,
+                        tags: args.tags,
+                    })?;
                 Ok(presenter.render_knowledge_detail(&result.candidate))
             }
             KnowledgeCandidateCommand::Delete(args) => {

@@ -3,15 +3,17 @@ use workc_domain::errors::DomainError;
 use workc_domain::shared::{RepoGroupId, RepoId, TaskId, TaskSlug};
 use workc_domain::task::{TaskIdGenerator, TaskRepository, TaskStatus, TaskWorkspace};
 
+use super::dtos::{
+    ApplicationTaskStatus, CloseTaskCommand, CreateTaskCommand, CreateTaskResult, ListTasksQuery,
+    OpenTaskCommand, TaskListItem, TaskRef,
+};
 use crate::error::ApplicationError;
 use crate::ports::{Clock, EditorLauncher};
-use super::dtos::{
-    ApplicationTaskStatus, CloseTaskCommand, CreateTaskCommand, CreateTaskResult, ListTasksQuery, OpenTaskCommand, TaskListItem, TaskRef,
-};
 
 pub trait TaskApplicationService {
     fn list_tasks(&self, query: ListTasksQuery) -> Result<Vec<TaskListItem>, ApplicationError>;
-    fn create_task(&self, command: CreateTaskCommand) -> Result<CreateTaskResult, ApplicationError>;
+    fn create_task(&self, command: CreateTaskCommand)
+    -> Result<CreateTaskResult, ApplicationError>;
     fn open_task(&self, command: OpenTaskCommand) -> Result<(), ApplicationError>;
     fn close_task(&self, command: CloseTaskCommand) -> Result<(), ApplicationError>;
 }
@@ -42,7 +44,9 @@ impl DefaultTaskApplicationService {
     }
 
     fn task_root_path(&self, task: &TaskWorkspace) -> Utf8PathBuf {
-        self.workspace_root.join("tasks").join(task.meta.id.as_str())
+        self.workspace_root
+            .join("tasks")
+            .join(task.meta.id.as_str())
     }
 
     fn load_task(&self, task_ref: &TaskRef) -> Result<TaskWorkspace, ApplicationError> {
@@ -51,13 +55,15 @@ impl DefaultTaskApplicationService {
             TaskRef::Slug(slug) => self.tasks.find_by_slug(&TaskSlug::from(slug.as_str()))?,
         };
 
-        task.ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
-            entity: "task",
-            id: match task_ref {
-                TaskRef::Id(id) => id.clone(),
-                TaskRef::Slug(slug) => slug.clone(),
-            },
-        }))
+        task.ok_or_else(|| {
+            ApplicationError::Domain(DomainError::NotFound {
+                entity: "task",
+                id: match task_ref {
+                    TaskRef::Id(id) => id.clone(),
+                    TaskRef::Slug(slug) => slug.clone(),
+                },
+            })
+        })
     }
 }
 
@@ -100,7 +106,10 @@ impl TaskApplicationService for DefaultTaskApplicationService {
             .collect())
     }
 
-    fn create_task(&self, command: CreateTaskCommand) -> Result<CreateTaskResult, ApplicationError> {
+    fn create_task(
+        &self,
+        command: CreateTaskCommand,
+    ) -> Result<CreateTaskResult, ApplicationError> {
         let slug = TaskSlug::from(command.slug.as_str());
 
         if self.tasks.find_by_slug(&slug)?.is_some() {
@@ -168,10 +177,12 @@ impl TaskApplicationService for DefaultTaskApplicationService {
         let mut task = self
             .tasks
             .find_by_id(&TaskId::from(command.task_id.as_str()))?
-            .ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
-                entity: "task",
-                id: command.task_id.clone(),
-            }))?;
+            .ok_or_else(|| {
+                ApplicationError::Domain(DomainError::NotFound {
+                    entity: "task",
+                    id: command.task_id.clone(),
+                })
+            })?;
         task.close(self.clock.now());
         self.tasks.save(&task)?;
         Ok(())
@@ -216,8 +227,16 @@ mod tests {
     }
 
     impl TaskRepository for InMemoryTaskRepository {
-        fn find_by_id(&self, id: &workc_domain::shared::TaskId) -> Result<Option<TaskWorkspace>, DomainError> {
-            Ok(self.tasks.borrow().values().find(|task| task.meta.id == *id).cloned())
+        fn find_by_id(
+            &self,
+            id: &workc_domain::shared::TaskId,
+        ) -> Result<Option<TaskWorkspace>, DomainError> {
+            Ok(self
+                .tasks
+                .borrow()
+                .values()
+                .find(|task| task.meta.id == *id)
+                .cloned())
         }
 
         fn find_by_slug(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
@@ -256,7 +275,11 @@ mod tests {
     }
 
     impl TaskIdGenerator for FixedTaskIdGenerator {
-        fn next_id(&self, _now: OffsetDateTime, _slug_hint: &TaskSlug) -> Result<TaskId, DomainError> {
+        fn next_id(
+            &self,
+            _now: OffsetDateTime,
+            _slug_hint: &TaskSlug,
+        ) -> Result<TaskId, DomainError> {
             Ok(self.next.clone())
         }
     }
@@ -306,7 +329,12 @@ mod tests {
         )
     }
 
-    fn sample_task(id: &str, slug: &str, title: &str, last_activity_at: Option<OffsetDateTime>) -> TaskWorkspace {
+    fn sample_task(
+        id: &str,
+        slug: &str,
+        title: &str,
+        last_activity_at: Option<OffsetDateTime>,
+    ) -> TaskWorkspace {
         TaskWorkspace {
             meta: TaskMeta {
                 id: TaskId::from(id),
@@ -340,7 +368,10 @@ mod tests {
 
     #[test]
     fn create_task_accepts_initial_skills_and_repo_groups() {
-        let service = service(InMemoryTaskRepository::default(), RecordingEditorLauncher::default());
+        let service = service(
+            InMemoryTaskRepository::default(),
+            RecordingEditorLauncher::default(),
+        );
 
         let result = service.create_task(CreateTaskCommand {
             slug: "auth-session-fix".to_owned(),
@@ -408,7 +439,9 @@ mod tests {
             editor: None,
         });
 
-        assert!(matches!(result, Err(ApplicationError::InvalidRequest(message)) if message.contains("missing --editor")));
+        assert!(
+            matches!(result, Err(ApplicationError::InvalidRequest(message)) if message.contains("missing --editor"))
+        );
     }
 
     #[test]
@@ -438,7 +471,9 @@ mod tests {
             editor: Some(EditorKind::Cursor),
         });
 
-        assert!(matches!(result, Err(ApplicationError::ExternalFailure { port, .. }) if port == "editor"));
+        assert!(
+            matches!(result, Err(ApplicationError::ExternalFailure { port, .. }) if port == "editor")
+        );
 
         let stored = service
             .tasks
@@ -509,7 +544,9 @@ mod tests {
             repos: vec![],
             initial_skills: vec![],
         });
-        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "task"));
+        assert!(
+            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "task")
+        );
     }
 
     #[test]

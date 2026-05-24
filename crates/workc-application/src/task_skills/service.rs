@@ -3,29 +3,53 @@ use std::collections::BTreeSet;
 use camino::Utf8PathBuf;
 use workc_domain::errors::DomainError;
 use workc_domain::shared::{MountId, SkillId, SkillVersion, TaskId};
-use workc_domain::skill_registry::{SkillRegistryRepository};
-use workc_domain::task::{TaskRepository, TaskSkillMount, TaskSkillMountRepository, TaskSkillMountStatus};
+use workc_domain::skill_registry::SkillRegistryRepository;
+use workc_domain::task::{
+    TaskRepository, TaskSkillMount, TaskSkillMountRepository, TaskSkillMountStatus,
+};
 
 use crate::error::ApplicationError;
 use crate::ports::{Clock, PrepareStatusRecord, SkillRuntime};
 
 use super::dtos::{
-    CheckSkillUpdatesQuery, MountSkillCommand, OverrideSkillCommand, PrepareSkillCommand, PrepareStatusQuery, SandboxSkillCommand,
-    SkillMountSummary, SkillPreparation, SkillSandboxHandle, SkillUpdateStatus, SkillUseExecution, UnmountSkillCommand,
+    CheckSkillUpdatesQuery, MountSkillCommand, OverrideSkillCommand, PrepareSkillCommand,
+    PrepareStatusQuery, SandboxSkillCommand, SkillMountSummary, SkillPreparation,
+    SkillSandboxHandle, SkillUpdateStatus, SkillUseExecution, UnmountSkillCommand,
     UpdateSkillCommand, UseSkillCommand,
 };
 
 pub trait TaskSkillsApplicationService {
-    fn mount_skill(&self, command: MountSkillCommand) -> Result<SkillMountSummary, ApplicationError>;
-    fn list_mounts(&self, task_id: &workc_domain::shared::TaskId) -> Result<Vec<SkillMountSummary>, ApplicationError>;
+    fn mount_skill(
+        &self,
+        command: MountSkillCommand,
+    ) -> Result<SkillMountSummary, ApplicationError>;
+    fn list_mounts(
+        &self,
+        task_id: &workc_domain::shared::TaskId,
+    ) -> Result<Vec<SkillMountSummary>, ApplicationError>;
     fn unmount_skill(&self, command: UnmountSkillCommand) -> Result<(), ApplicationError>;
     fn override_skill(&self, command: OverrideSkillCommand) -> Result<(), ApplicationError>;
-    fn check_skill_updates(&self, query: CheckSkillUpdatesQuery) -> Result<Vec<SkillUpdateStatus>, ApplicationError>;
-    fn update_skill(&self, command: UpdateSkillCommand) -> Result<SkillMountSummary, ApplicationError>;
-    fn sandbox_skill(&self, command: SandboxSkillCommand) -> Result<SkillSandboxHandle, ApplicationError>;
-    fn prepare_skill(&self, command: PrepareSkillCommand) -> Result<SkillPreparation, ApplicationError>;
+    fn check_skill_updates(
+        &self,
+        query: CheckSkillUpdatesQuery,
+    ) -> Result<Vec<SkillUpdateStatus>, ApplicationError>;
+    fn update_skill(
+        &self,
+        command: UpdateSkillCommand,
+    ) -> Result<SkillMountSummary, ApplicationError>;
+    fn sandbox_skill(
+        &self,
+        command: SandboxSkillCommand,
+    ) -> Result<SkillSandboxHandle, ApplicationError>;
+    fn prepare_skill(
+        &self,
+        command: PrepareSkillCommand,
+    ) -> Result<SkillPreparation, ApplicationError>;
     fn use_skill(&self, command: UseSkillCommand) -> Result<SkillUseExecution, ApplicationError>;
-    fn get_prepare_status(&self, query: PrepareStatusQuery) -> Result<PrepareStatusRecord, ApplicationError>;
+    fn get_prepare_status(
+        &self,
+        query: PrepareStatusQuery,
+    ) -> Result<PrepareStatusRecord, ApplicationError>;
 }
 
 pub struct DefaultTaskSkillsApplicationService {
@@ -53,16 +77,22 @@ impl DefaultTaskSkillsApplicationService {
         }
     }
 
-    fn load_task(&self, task_ref: &str) -> Result<workc_domain::task::TaskWorkspace, ApplicationError> {
+    fn load_task(
+        &self,
+        task_ref: &str,
+    ) -> Result<workc_domain::task::TaskWorkspace, ApplicationError> {
         let task = if task_ref.starts_with("task-") {
             self.tasks.find_by_id(&TaskId::from(task_ref))?
         } else {
-            self.tasks.find_by_slug(&workc_domain::shared::TaskSlug::from(task_ref))?
+            self.tasks
+                .find_by_slug(&workc_domain::shared::TaskSlug::from(task_ref))?
         };
-        task.ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
-            entity: "task",
-            id: task_ref.to_owned(),
-        }))
+        task.ok_or_else(|| {
+            ApplicationError::Domain(DomainError::NotFound {
+                entity: "task",
+                id: task_ref.to_owned(),
+            })
+        })
     }
 
     fn mount_path(task_id: &TaskId, mount_id: &MountId) -> Utf8PathBuf {
@@ -93,21 +123,25 @@ impl DefaultTaskSkillsApplicationService {
 }
 
 impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
-    fn mount_skill(&self, command: MountSkillCommand) -> Result<SkillMountSummary, ApplicationError> {
+    fn mount_skill(
+        &self,
+        command: MountSkillCommand,
+    ) -> Result<SkillMountSummary, ApplicationError> {
         let task = self.load_task(&command.task_id)?;
         let skill_id = SkillId::from(command.skill_id.as_str());
-        let skill = self
-            .registry
-            .find_skill(&skill_id)?
-            .ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
+        let skill = self.registry.find_skill(&skill_id)?.ok_or_else(|| {
+            ApplicationError::Domain(DomainError::NotFound {
                 entity: "skill",
                 id: skill_id.to_string(),
-            }))?;
+            })
+        })?;
         let version = command
             .version
             .map(|value| SkillVersion::from(value.as_str()))
             .or_else(|| skill.latest.clone())
-            .ok_or_else(|| ApplicationError::InvalidRequest("skill version is required".to_owned()))?;
+            .ok_or_else(|| {
+                ApplicationError::InvalidRequest("skill version is required".to_owned())
+            })?;
 
         let mut mounts = self.mounts.list_for_task(&task.meta.id)?;
         let mount_id = MountId::from(format!("mount-{:03}", mounts.len() + 1));
@@ -125,7 +159,10 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         Ok(Self::to_summary(&task.meta.id, mount))
     }
 
-    fn list_mounts(&self, task_id: &workc_domain::shared::TaskId) -> Result<Vec<SkillMountSummary>, ApplicationError> {
+    fn list_mounts(
+        &self,
+        task_id: &workc_domain::shared::TaskId,
+    ) -> Result<Vec<SkillMountSummary>, ApplicationError> {
         Ok(self
             .mounts
             .list_for_task(task_id)?
@@ -146,10 +183,14 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         Err(ApplicationError::AdapterUnavailable("skill override"))
     }
 
-    fn check_skill_updates(&self, query: CheckSkillUpdatesQuery) -> Result<Vec<SkillUpdateStatus>, ApplicationError> {
+    fn check_skill_updates(
+        &self,
+        query: CheckSkillUpdatesQuery,
+    ) -> Result<Vec<SkillUpdateStatus>, ApplicationError> {
         let task_id = TaskId::from(query.task_id.as_str());
         let mounts = self.mounts.list_for_task(&task_id)?;
-        let selected_mounts: Option<BTreeSet<String>> = query.mount_id.map(|value| [value].into_iter().collect());
+        let selected_mounts: Option<BTreeSet<String>> =
+            query.mount_id.map(|value| [value].into_iter().collect());
         let mut result = Vec::new();
 
         for mount in mounts {
@@ -158,14 +199,16 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
                     continue;
                 }
             }
-            let skill = self
-                .registry
-                .find_skill(&mount.skill_id)?
-                .ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
+            let skill = self.registry.find_skill(&mount.skill_id)?.ok_or_else(|| {
+                ApplicationError::Domain(DomainError::NotFound {
                     entity: "skill",
                     id: mount.skill_id.to_string(),
-                }))?;
-            let update_available = skill.latest.as_ref().is_some_and(|latest| latest != &mount.version);
+                })
+            })?;
+            let update_available = skill
+                .latest
+                .as_ref()
+                .is_some_and(|latest| latest != &mount.version);
             result.push(SkillUpdateStatus {
                 mount_id: mount.id.to_string(),
                 update_available,
@@ -176,35 +219,41 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         Ok(result)
     }
 
-    fn update_skill(&self, command: UpdateSkillCommand) -> Result<SkillMountSummary, ApplicationError> {
+    fn update_skill(
+        &self,
+        command: UpdateSkillCommand,
+    ) -> Result<SkillMountSummary, ApplicationError> {
         let task_id = TaskId::from(command.task_id.as_str());
         let mount_id = MountId::from(command.mount_id.as_str());
         let mut mounts = self.mounts.list_for_task(&task_id)?;
         let mount_index = mounts
             .iter()
             .position(|mount| mount.id == mount_id)
-            .ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
-                entity: "mount",
-                id: mount_id.to_string(),
-            }))?;
+            .ok_or_else(|| {
+                ApplicationError::Domain(DomainError::NotFound {
+                    entity: "mount",
+                    id: mount_id.to_string(),
+                })
+            })?;
         let skill_id = mounts[mount_index].skill_id.clone();
-        let skill = self
-            .registry
-            .find_skill(&skill_id)?
-            .ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
+        let skill = self.registry.find_skill(&skill_id)?.ok_or_else(|| {
+            ApplicationError::Domain(DomainError::NotFound {
                 entity: "skill",
                 id: skill_id.to_string(),
-            }))?;
-        mounts[mount_index].version = skill
-            .latest
-            .clone()
-            .ok_or_else(|| ApplicationError::InvalidRequest("no latest version available".to_owned()))?;
+            })
+        })?;
+        mounts[mount_index].version = skill.latest.clone().ok_or_else(|| {
+            ApplicationError::InvalidRequest("no latest version available".to_owned())
+        })?;
         let updated_mount = mounts[mount_index].clone();
         self.mounts.save_for_task(&task_id, &mounts)?;
         Ok(Self::to_summary(&task_id, updated_mount))
     }
 
-    fn sandbox_skill(&self, command: SandboxSkillCommand) -> Result<SkillSandboxHandle, ApplicationError> {
+    fn sandbox_skill(
+        &self,
+        command: SandboxSkillCommand,
+    ) -> Result<SkillSandboxHandle, ApplicationError> {
         let task_id = TaskId::from(command.task_id.as_str());
         let mount_id = MountId::from(command.mount_id.as_str());
         Ok(SkillSandboxHandle {
@@ -213,11 +262,17 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         })
     }
 
-    fn prepare_skill(&self, command: PrepareSkillCommand) -> Result<SkillPreparation, ApplicationError> {
+    fn prepare_skill(
+        &self,
+        command: PrepareSkillCommand,
+    ) -> Result<SkillPreparation, ApplicationError> {
         let task_id = TaskId::from(command.task_id.as_str());
         let mount_id = MountId::from(command.mount_id.as_str());
         let path = Self::mount_path(&task_id, &mount_id);
-        let runtime = self.runtime.as_ref().ok_or(ApplicationError::AdapterUnavailable("skill prepare"))?;
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or(ApplicationError::AdapterUnavailable("skill prepare"))?;
         let result = runtime
             .prepare(
                 path.as_path(),
@@ -242,7 +297,10 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         let task_id = TaskId::from(command.task_id.as_str());
         let mount_id = MountId::from(command.mount_id.as_str());
         let path = Self::mount_path(&task_id, &mount_id);
-        let runtime = self.runtime.as_ref().ok_or(ApplicationError::AdapterUnavailable("skill use"))?;
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or(ApplicationError::AdapterUnavailable("skill use"))?;
         let result = runtime
             .use_skill(
                 path.as_path(),
@@ -262,11 +320,17 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         })
     }
 
-    fn get_prepare_status(&self, query: PrepareStatusQuery) -> Result<PrepareStatusRecord, ApplicationError> {
+    fn get_prepare_status(
+        &self,
+        query: PrepareStatusQuery,
+    ) -> Result<PrepareStatusRecord, ApplicationError> {
         let task_id = TaskId::from(query.task_id.as_str());
         let mount_id = MountId::from(query.mount_id.as_str());
         let path = Self::mount_path(&task_id, &mount_id);
-        let runtime = self.runtime.as_ref().ok_or(ApplicationError::AdapterUnavailable("skill prepare-status"))?;
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or(ApplicationError::AdapterUnavailable("skill prepare-status"))?;
         runtime
             .check_prepare_status(path.as_path())
             .map_err(|error| ApplicationError::ExternalFailure {
@@ -286,8 +350,8 @@ mod tests {
     use workc_domain::errors::DomainError;
     use workc_domain::shared::{MountId, SkillId, SkillSourceId, SkillVersion, TaskId, TaskSlug};
     use workc_domain::skill_registry::{
-        PrepareResult, PrepareStep, SkillDefinition, SkillExecutionStatus, SkillRegistry, SkillRegistryRepository,
-        SkillSource, UseResult, UseStep,
+        PrepareResult, PrepareStep, SkillDefinition, SkillExecutionStatus, SkillRegistry,
+        SkillRegistryRepository, SkillSource, UseResult, UseStep,
     };
     use workc_domain::task::{
         TaskActivity, TaskMeta, TaskPaths, TaskRepoSelection, TaskRepository, TaskSkillMount,
@@ -305,11 +369,21 @@ mod tests {
 
     impl TaskRepository for InMemoryTaskRepository {
         fn find_by_id(&self, id: &TaskId) -> Result<Option<TaskWorkspace>, DomainError> {
-            Ok(self.tasks.borrow().values().find(|t| t.meta.id == *id).cloned())
+            Ok(self
+                .tasks
+                .borrow()
+                .values()
+                .find(|t| t.meta.id == *id)
+                .cloned())
         }
 
         fn find_by_slug(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
-            Ok(self.tasks.borrow().values().find(|t| t.meta.slug == *slug).cloned())
+            Ok(self
+                .tasks
+                .borrow()
+                .values()
+                .find(|t| t.meta.slug == *slug)
+                .cloned())
         }
 
         fn list(&self) -> Result<Vec<TaskWorkspace>, DomainError> {
@@ -317,7 +391,9 @@ mod tests {
         }
 
         fn save(&self, task: &TaskWorkspace) -> Result<(), DomainError> {
-            self.tasks.borrow_mut().insert(task.meta.id.to_string(), task.clone());
+            self.tasks
+                .borrow_mut()
+                .insert(task.meta.id.to_string(), task.clone());
             Ok(())
         }
     }
@@ -338,11 +414,23 @@ mod tests {
         }
 
         fn find_source(&self, id: &SkillSourceId) -> Result<Option<SkillSource>, DomainError> {
-            Ok(self.registry.borrow().sources.iter().find(|s| s.id == *id).cloned())
+            Ok(self
+                .registry
+                .borrow()
+                .sources
+                .iter()
+                .find(|s| s.id == *id)
+                .cloned())
         }
 
         fn find_skill(&self, id: &SkillId) -> Result<Option<SkillDefinition>, DomainError> {
-            Ok(self.registry.borrow().skills.iter().find(|s| s.id == *id).cloned())
+            Ok(self
+                .registry
+                .borrow()
+                .skills
+                .iter()
+                .find(|s| s.id == *id)
+                .cloned())
         }
     }
 
@@ -353,11 +441,22 @@ mod tests {
 
     impl TaskSkillMountRepository for InMemoryTaskSkillMountRepository {
         fn list_for_task(&self, task_id: &TaskId) -> Result<Vec<TaskSkillMount>, DomainError> {
-            Ok(self.mounts.borrow().get(task_id.as_str()).cloned().unwrap_or_default())
+            Ok(self
+                .mounts
+                .borrow()
+                .get(task_id.as_str())
+                .cloned()
+                .unwrap_or_default())
         }
 
-        fn save_for_task(&self, task_id: &TaskId, mounts: &[TaskSkillMount]) -> Result<(), DomainError> {
-            self.mounts.borrow_mut().insert(task_id.to_string(), mounts.to_vec());
+        fn save_for_task(
+            &self,
+            task_id: &TaskId,
+            mounts: &[TaskSkillMount],
+        ) -> Result<(), DomainError> {
+            self.mounts
+                .borrow_mut()
+                .insert(task_id.to_string(), mounts.to_vec());
             Ok(())
         }
 
@@ -380,7 +479,11 @@ mod tests {
     struct StubSkillRuntime;
 
     impl SkillRuntime for StubSkillRuntime {
-        fn prepare(&self, _mount_path: &Utf8Path, _step: PrepareStep) -> Result<PrepareResult, RuntimeError> {
+        fn prepare(
+            &self,
+            _mount_path: &Utf8Path,
+            _step: PrepareStep,
+        ) -> Result<PrepareResult, RuntimeError> {
             Ok(PrepareResult {
                 status: SkillExecutionStatus::Success,
                 artifact_path: Some("artifact".into()),
@@ -389,7 +492,11 @@ mod tests {
             })
         }
 
-        fn use_skill(&self, _mount_path: &Utf8Path, _step: UseStep) -> Result<UseResult, RuntimeError> {
+        fn use_skill(
+            &self,
+            _mount_path: &Utf8Path,
+            _step: UseStep,
+        ) -> Result<UseResult, RuntimeError> {
             Ok(UseResult {
                 status: SkillExecutionStatus::Success,
                 log_path: Some("log".into()),
@@ -397,7 +504,10 @@ mod tests {
             })
         }
 
-        fn check_prepare_status(&self, _mount_path: &Utf8Path) -> Result<PrepareStatusRecord, RuntimeError> {
+        fn check_prepare_status(
+            &self,
+            _mount_path: &Utf8Path,
+        ) -> Result<PrepareStatusRecord, RuntimeError> {
             Ok(PrepareStatusRecord {
                 status: SkillExecutionStatus::Success,
                 last_run_at: Some(OffsetDateTime::UNIX_EPOCH),
@@ -535,7 +645,9 @@ mod tests {
     #[test]
     fn list_mounts_returns_empty_initially() {
         let svc = service_without_runtime();
-        let mounts = svc.list_mounts(&TaskId::from("task-20260524-auth")).unwrap();
+        let mounts = svc
+            .list_mounts(&TaskId::from("task-20260524-auth"))
+            .unwrap();
         assert!(mounts.is_empty());
     }
 
@@ -556,7 +668,9 @@ mod tests {
         })
         .unwrap();
 
-        let mounts = svc.list_mounts(&TaskId::from("task-20260524-auth")).unwrap();
+        let mounts = svc
+            .list_mounts(&TaskId::from("task-20260524-auth"))
+            .unwrap();
         assert!(mounts.is_empty());
     }
 
@@ -568,7 +682,10 @@ mod tests {
             mount_id: "m1".to_owned(),
             relative_path: "override".into(),
         });
-        assert!(matches!(result, Err(ApplicationError::AdapterUnavailable("skill override"))));
+        assert!(matches!(
+            result,
+            Err(ApplicationError::AdapterUnavailable("skill override"))
+        ));
     }
 
     #[test]
@@ -686,7 +803,10 @@ mod tests {
                 action_id: "npm-install".to_owned(),
             },
         });
-        assert!(matches!(result, Err(ApplicationError::AdapterUnavailable(..))));
+        assert!(matches!(
+            result,
+            Err(ApplicationError::AdapterUnavailable(..))
+        ));
     }
 
     #[test]
@@ -718,7 +838,10 @@ mod tests {
                 action_id: "eslint".to_owned(),
             },
         });
-        assert!(matches!(result, Err(ApplicationError::AdapterUnavailable(..))));
+        assert!(matches!(
+            result,
+            Err(ApplicationError::AdapterUnavailable(..))
+        ));
     }
 
     #[test]
@@ -742,6 +865,9 @@ mod tests {
             task_id: "task-20260524-auth".to_owned(),
             mount_id: "mount-001".to_owned(),
         });
-        assert!(matches!(result, Err(ApplicationError::AdapterUnavailable(..))));
+        assert!(matches!(
+            result,
+            Err(ApplicationError::AdapterUnavailable(..))
+        ));
     }
 }

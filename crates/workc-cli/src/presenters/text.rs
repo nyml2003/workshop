@@ -1,15 +1,12 @@
+use workc_application::knowledge::KnowledgeObjectSummary;
 use workc_application::repo_catalog::{RepoGroupSummary, RepoSummary};
+use workc_application::skill_registry::SkillSummary;
 use workc_application::task::TaskListItem;
 use workc_application::task_repos::{RepoCloneOutcome, TaskRepoStatusItem, TaskReposResult};
-use workc_application::knowledge::KnowledgeObjectSummary;
-use workc_application::skill_registry::SkillSummary;
 use workc_application::task_skills::{SkillMountSummary, SkillUpdateStatus};
 
 pub fn render_task_created(id: &str, slug: &str, title: &str, template: &str) -> String {
-    format!(
-        "Created task {}\n  slug: {}\n  title: {}\n  template: {}",
-        id, slug, title, template
-    )
+    format!("Created task {id}\n  slug: {slug}\n  title: {title}\n  template: {template}")
 }
 
 pub fn render_task_list(items: &[TaskListItem]) -> String {
@@ -17,7 +14,8 @@ pub fn render_task_list(items: &[TaskListItem]) -> String {
         return "No tasks found.".to_owned();
     }
 
-    items.iter()
+    items
+        .iter()
         .map(|item| {
             let last_activity = item
                 .last_activity_at
@@ -45,14 +43,19 @@ pub fn render_repo_list(repos: &[RepoSummary]) -> String {
         return "No repos found.".to_owned();
     }
 
-    repos.iter()
+    repos
+        .iter()
         .map(|repo| format!("{} | {} | tags={}", repo.id, repo.url, repo.tags.join(",")))
         .collect::<Vec<_>>()
         .join("\n")
 }
 
 pub fn render_repo_group_created(group: &RepoGroupSummary) -> String {
-    format!("Added repo-group {}\n  repos: {}", group.id, group.repos.join(","))
+    format!(
+        "Added repo-group {}\n  repos: {}",
+        group.id,
+        group.repos.join(",")
+    )
 }
 
 pub fn render_repo_group_list(groups: &[RepoGroupSummary]) -> String {
@@ -62,7 +65,14 @@ pub fn render_repo_group_list(groups: &[RepoGroupSummary]) -> String {
 
     groups
         .iter()
-        .map(|group| format!("{} | repos={} | tags={}", group.id, group.repos.join(","), group.tags.join(",")))
+        .map(|group| {
+            format!(
+                "{} | repos={} | tags={}",
+                group.id,
+                group.repos.join(","),
+                group.tags.join(",")
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -101,7 +111,10 @@ pub fn render_repo_clone_outcomes(outcomes: &[RepoCloneOutcome]) -> String {
                     .clone()
                     .unwrap_or_else(|| "skipped".to_owned())
             };
-            format!("{} | {} | {} | {}", outcome.repo_id, outcome.path, mode, result)
+            format!(
+                "{} | {} | {} | {}",
+                outcome.repo_id, outcome.path, mode, result
+            )
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -112,7 +125,8 @@ pub fn render_repo_statuses(items: &[TaskRepoStatusItem]) -> String {
         return "No repo statuses found.".to_owned();
     }
 
-    items.iter()
+    items
+        .iter()
         .map(|item| {
             format!(
                 "{} | {:?} | branch={} | dirty={} | ahead={} | behind={}",
@@ -135,7 +149,15 @@ pub fn render_knowledge_list(items: &[KnowledgeObjectSummary]) -> String {
 
     items
         .iter()
-        .map(|item| format!("{} | {} | category={} | tags={}", item.id, item.path, item.category.clone().unwrap_or_else(|| "-".to_owned()), item.tags.join(",")))
+        .map(|item| {
+            format!(
+                "{} | {} | category={} | tags={}",
+                item.id,
+                item.path,
+                item.category.clone().unwrap_or_else(|| "-".to_owned()),
+                item.tags.join(",")
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -147,7 +169,11 @@ pub fn render_knowledge_detail(item: &KnowledgeObjectSummary) -> String {
         item.title,
         item.path,
         item.category.clone().unwrap_or_else(|| "-".to_owned()),
-        if item.tags.is_empty() { "-".to_owned() } else { item.tags.join(",") },
+        if item.tags.is_empty() {
+            "-".to_owned()
+        } else {
+            item.tags.join(",")
+        },
         item.source_count
     )
 }
@@ -157,7 +183,11 @@ pub fn render_skill_summary(item: &SkillSummary) -> String {
         "Skill {}\n  source: {}\n  versions: {}\n  latest: {}",
         item.id,
         item.source,
-        if item.versions.is_empty() { "-".to_owned() } else { item.versions.join(",") },
+        if item.versions.is_empty() {
+            "-".to_owned()
+        } else {
+            item.versions.join(",")
+        },
         item.latest.clone().unwrap_or_else(|| "-".to_owned())
     )
 }
@@ -177,7 +207,12 @@ pub fn render_skill_mounts(items: &[SkillMountSummary]) -> String {
 
     items
         .iter()
-        .map(|item| format!("{} | {} | version={} | status={}", item.mount_id, item.skill_id, item.version, item.status))
+        .map(|item| {
+            format!(
+                "{} | {} | version={} | status={}",
+                item.mount_id, item.skill_id, item.version, item.status
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -196,7 +231,16 @@ pub fn render_skill_updates(items: &[SkillUpdateStatus]) -> String {
 
     items
         .iter()
-        .map(|item| format!("{} | update_available={} | target_version={}", item.mount_id, item.update_available, item.target_version.clone().unwrap_or_else(|| "-".to_owned())))
+        .map(|item| {
+            format!(
+                "{} | update_available={} | target_version={}",
+                item.mount_id,
+                item.update_available,
+                item.target_version
+                    .clone()
+                    .unwrap_or_else(|| "-".to_owned())
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }

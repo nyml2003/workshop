@@ -10,16 +10,31 @@ use crate::error::ApplicationError;
 use crate::ports::{Clock, GitClient};
 
 use super::dtos::{
-    AddTaskReposCommand, CloneStateFilter, CloneTaskReposCommand, RemoveTaskReposCommand, RepoCloneOutcome, RepoStatusQuery,
-    SetTaskReposCommand, TaskRepoStatusItem, TaskReposResult,
+    AddTaskReposCommand, CloneStateFilter, CloneTaskReposCommand, RemoveTaskReposCommand,
+    RepoCloneOutcome, RepoStatusQuery, SetTaskReposCommand, TaskRepoStatusItem, TaskReposResult,
 };
 
 pub trait TaskReposApplicationService {
-    fn set_task_repos(&self, command: SetTaskReposCommand) -> Result<TaskReposResult, ApplicationError>;
-    fn add_task_repos(&self, command: AddTaskReposCommand) -> Result<TaskReposResult, ApplicationError>;
-    fn remove_task_repos(&self, command: RemoveTaskReposCommand) -> Result<TaskReposResult, ApplicationError>;
-    fn clone_task_repos(&self, command: CloneTaskReposCommand) -> Result<Vec<RepoCloneOutcome>, ApplicationError>;
-    fn get_repo_statuses(&self, query: RepoStatusQuery) -> Result<Vec<TaskRepoStatusItem>, ApplicationError>;
+    fn set_task_repos(
+        &self,
+        command: SetTaskReposCommand,
+    ) -> Result<TaskReposResult, ApplicationError>;
+    fn add_task_repos(
+        &self,
+        command: AddTaskReposCommand,
+    ) -> Result<TaskReposResult, ApplicationError>;
+    fn remove_task_repos(
+        &self,
+        command: RemoveTaskReposCommand,
+    ) -> Result<TaskReposResult, ApplicationError>;
+    fn clone_task_repos(
+        &self,
+        command: CloneTaskReposCommand,
+    ) -> Result<Vec<RepoCloneOutcome>, ApplicationError>;
+    fn get_repo_statuses(
+        &self,
+        query: RepoStatusQuery,
+    ) -> Result<Vec<TaskRepoStatusItem>, ApplicationError>;
 }
 
 pub struct DefaultTaskReposApplicationService {
@@ -44,17 +59,22 @@ impl DefaultTaskReposApplicationService {
         }
     }
 
-    fn load_task(&self, task_ref: &str) -> Result<workc_domain::task::TaskWorkspace, ApplicationError> {
+    fn load_task(
+        &self,
+        task_ref: &str,
+    ) -> Result<workc_domain::task::TaskWorkspace, ApplicationError> {
         let task = if task_ref.starts_with("task-") {
             self.tasks.find_by_id(&TaskId::from(task_ref))?
         } else {
             self.tasks.find_by_slug(&TaskSlug::from(task_ref))?
         };
 
-        task.ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
-            entity: "task",
-            id: task_ref.to_owned(),
-        }))
+        task.ok_or_else(|| {
+            ApplicationError::Domain(DomainError::NotFound {
+                entity: "task",
+                id: task_ref.to_owned(),
+            })
+        })
     }
 
     fn validate_repos_exist(&self, repo_ids: &[RepoId]) -> Result<(), ApplicationError> {
@@ -81,10 +101,12 @@ impl DefaultTaskReposApplicationService {
                 .groups
                 .iter()
                 .find(|group| group.id == *group_id)
-                .ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
-                    entity: "repo-group",
-                    id: group_id.to_string(),
-                }))?;
+                .ok_or_else(|| {
+                    ApplicationError::Domain(DomainError::NotFound {
+                        entity: "repo-group",
+                        id: group_id.to_string(),
+                    })
+                })?;
             repos.extend(group.repos.clone());
         }
         Ok(repos)
@@ -130,7 +152,8 @@ impl DefaultTaskReposApplicationService {
         missing_only: bool,
     ) -> Result<Vec<(RepoId, Utf8PathBuf, String, bool)>, ApplicationError> {
         let catalog = self.repo_catalog.load()?;
-        let selected: Option<BTreeSet<String>> = selected_repos.map(|repos| repos.into_iter().collect());
+        let selected: Option<BTreeSet<String>> =
+            selected_repos.map(|repos| repos.into_iter().collect());
         let mut targets = Vec::new();
 
         for repo_id in &task.repos.repos {
@@ -144,10 +167,12 @@ impl DefaultTaskReposApplicationService {
                 .repos
                 .iter()
                 .find(|entry| entry.id == *repo_id)
-                .ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
-                    entity: "repo",
-                    id: repo_id.to_string(),
-                }))?;
+                .ok_or_else(|| {
+                    ApplicationError::Domain(DomainError::NotFound {
+                        entity: "repo",
+                        id: repo_id.to_string(),
+                    })
+                })?;
             let path = Self::task_repo_path(task, repo_id);
             let exists = path.exists();
             if missing_only && exists {
@@ -161,7 +186,10 @@ impl DefaultTaskReposApplicationService {
 }
 
 impl TaskReposApplicationService for DefaultTaskReposApplicationService {
-    fn set_task_repos(&self, command: SetTaskReposCommand) -> Result<TaskReposResult, ApplicationError> {
+    fn set_task_repos(
+        &self,
+        command: SetTaskReposCommand,
+    ) -> Result<TaskReposResult, ApplicationError> {
         let task = self.load_task(&command.task_id)?;
         let group_ids: Vec<RepoGroupId> = command
             .selected_repo_groups
@@ -181,10 +209,14 @@ impl TaskReposApplicationService for DefaultTaskReposApplicationService {
         self.update_task_repos(task, group_ids, repos)
     }
 
-    fn add_task_repos(&self, command: AddTaskReposCommand) -> Result<TaskReposResult, ApplicationError> {
+    fn add_task_repos(
+        &self,
+        command: AddTaskReposCommand,
+    ) -> Result<TaskReposResult, ApplicationError> {
         let task = self.load_task(&command.task_id)?;
         let selected_repo_groups = task.repos.selected_repo_groups.clone();
-        let mut merged: BTreeSet<String> = task.repos.repos.iter().map(ToString::to_string).collect();
+        let mut merged: BTreeSet<String> =
+            task.repos.repos.iter().map(ToString::to_string).collect();
         for repo in &command.repos {
             merged.insert(repo.clone());
         }
@@ -193,7 +225,10 @@ impl TaskReposApplicationService for DefaultTaskReposApplicationService {
         self.update_task_repos(task, selected_repo_groups, repos)
     }
 
-    fn remove_task_repos(&self, command: RemoveTaskReposCommand) -> Result<TaskReposResult, ApplicationError> {
+    fn remove_task_repos(
+        &self,
+        command: RemoveTaskReposCommand,
+    ) -> Result<TaskReposResult, ApplicationError> {
         let task = self.load_task(&command.task_id)?;
         let selected_repo_groups = task.repos.selected_repo_groups.clone();
         let remove: BTreeSet<String> = command.repos.into_iter().collect();
@@ -207,7 +242,10 @@ impl TaskReposApplicationService for DefaultTaskReposApplicationService {
         self.update_task_repos(task, selected_repo_groups, repos)
     }
 
-    fn clone_task_repos(&self, command: CloneTaskReposCommand) -> Result<Vec<RepoCloneOutcome>, ApplicationError> {
+    fn clone_task_repos(
+        &self,
+        command: CloneTaskReposCommand,
+    ) -> Result<Vec<RepoCloneOutcome>, ApplicationError> {
         let task = self.load_task(&command.task_id)?;
         let targets = self.resolve_clone_targets(&task, command.repos, command.missing_only)?;
 
@@ -270,9 +308,13 @@ impl TaskReposApplicationService for DefaultTaskReposApplicationService {
         Ok(outcomes)
     }
 
-    fn get_repo_statuses(&self, query: RepoStatusQuery) -> Result<Vec<TaskRepoStatusItem>, ApplicationError> {
+    fn get_repo_statuses(
+        &self,
+        query: RepoStatusQuery,
+    ) -> Result<Vec<TaskRepoStatusItem>, ApplicationError> {
         let task = self.load_task(&query.task_id)?;
-        let selected: Option<BTreeSet<String>> = query.repos.map(|repos| repos.into_iter().collect());
+        let selected: Option<BTreeSet<String>> =
+            query.repos.map(|repos| repos.into_iter().collect());
         let mut items = Vec::new();
 
         for repo_id in &task.repos.repos {
@@ -342,7 +384,10 @@ mod tests {
     use time::OffsetDateTime;
     use workc_domain::repo_catalog::{RepoCatalog, RepoCatalogRepository, RepoEntry, RepoGroup};
     use workc_domain::shared::{RepoId, TaskId, TaskSlug};
-    use workc_domain::task::{TaskActivity, TaskMeta, TaskPaths, TaskRepoSelection, TaskRepository, TaskStatus, TaskWorkspace};
+    use workc_domain::task::{
+        TaskActivity, TaskMeta, TaskPaths, TaskRepoSelection, TaskRepository, TaskStatus,
+        TaskWorkspace,
+    };
 
     use crate::ports::{Clock, CloneState, GitClient, RepoStatus};
 
@@ -355,11 +400,21 @@ mod tests {
 
     impl TaskRepository for InMemoryTaskRepository {
         fn find_by_id(&self, id: &TaskId) -> Result<Option<TaskWorkspace>, DomainError> {
-            Ok(self.tasks.borrow().values().find(|task| task.meta.id == *id).cloned())
+            Ok(self
+                .tasks
+                .borrow()
+                .values()
+                .find(|task| task.meta.id == *id)
+                .cloned())
         }
 
         fn find_by_slug(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
-            Ok(self.tasks.borrow().values().find(|task| task.meta.slug == *slug).cloned())
+            Ok(self
+                .tasks
+                .borrow()
+                .values()
+                .find(|task| task.meta.slug == *slug)
+                .cloned())
         }
 
         fn list(&self) -> Result<Vec<TaskWorkspace>, DomainError> {
@@ -367,7 +422,9 @@ mod tests {
         }
 
         fn save(&self, task: &TaskWorkspace) -> Result<(), DomainError> {
-            self.tasks.borrow_mut().insert(task.meta.id.to_string(), task.clone());
+            self.tasks
+                .borrow_mut()
+                .insert(task.meta.id.to_string(), task.clone());
             Ok(())
         }
     }
@@ -387,11 +444,23 @@ mod tests {
         }
 
         fn find_repo(&self, id: &RepoId) -> Result<Option<RepoEntry>, DomainError> {
-            Ok(self.catalog.borrow().repos.iter().find(|repo| repo.id == *id).cloned())
+            Ok(self
+                .catalog
+                .borrow()
+                .repos
+                .iter()
+                .find(|repo| repo.id == *id)
+                .cloned())
         }
 
         fn find_group(&self, id: &RepoGroupId) -> Result<Option<RepoGroup>, DomainError> {
-            Ok(self.catalog.borrow().groups.iter().find(|group| group.id == *id).cloned())
+            Ok(self
+                .catalog
+                .borrow()
+                .groups
+                .iter()
+                .find(|group| group.id == *id)
+                .cloned())
         }
     }
 
@@ -465,11 +534,18 @@ mod tests {
     struct RecordingGitClient;
 
     impl GitClient for RecordingGitClient {
-        fn clone_repo(&self, _path: &camino::Utf8Path, _url: &str) -> Result<(), crate::ports::GitError> {
+        fn clone_repo(
+            &self,
+            _path: &camino::Utf8Path,
+            _url: &str,
+        ) -> Result<(), crate::ports::GitError> {
             Ok(())
         }
 
-        fn get_repo_status(&self, _path: &camino::Utf8Path) -> Result<RepoStatus, crate::ports::GitError> {
+        fn get_repo_status(
+            &self,
+            _path: &camino::Utf8Path,
+        ) -> Result<RepoStatus, crate::ports::GitError> {
             Ok(RepoStatus {
                 branch: Some("main".to_owned()),
                 dirty: false,
@@ -535,7 +611,9 @@ mod tests {
             repos: vec!["unknown-repo".to_owned()],
         });
 
-        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo"));
+        assert!(
+            matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo")
+        );
     }
 
     #[test]
@@ -849,6 +927,8 @@ mod tests {
             selected_repo_groups: vec!["nonexistent".to_owned()],
             repos: vec![],
         });
-        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo-group"));
+        assert!(
+            matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo-group")
+        );
     }
 }

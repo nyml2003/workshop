@@ -32,7 +32,7 @@ task repos clone   <TASK> [--repo <REPO>]... [--missing] [--dry-run]
 task repos status  <TASK> [--repo <REPO>]... [--clone-state missing|ready|dirty|unknown] [--dry-run]
 ```
 
-注意：`--repo-groups` 和 `--skills` 在 CLI 中已声明参数，但 `task create` 服务层在当前阶段拒绝处理。
+注意：`--skills` 在服务层已不再被拦截，但 CLI 会在任务创建后自动尝试挂载指定技能——若技能未预先通过 `skill import` 导入，mount 将失败并报 "skill not found"。
 
 ### skill 命令组
 
@@ -133,9 +133,8 @@ workc 将所有数据存储在 workspace 根目录下，格式为 TOML。
 
 | 限制 | 影响 | 代码出处 |
 |---|---|---|
-| `task create` 不接受 `--repo-groups` | 传入非空 repo-groups 会直接报错 | `application/src/task/service.rs:104-108` |
-| `task create` 不接受 `--skills` | 传入 initial skills 会直接报错 | `application/src/task/service.rs:110-114` |
-| `open` 必须显式传 `--editor` | 不支持编辑器自动发现 | `application/src/task/service.rs:156-158` |
+| `task create --skills` 创建后自动 mount | 若技能未预先导入，mount 报 "skill not found" | `cli/src/cli/task.rs:231-247` |
+| `open` 必须显式传 `--editor` | 不支持编辑器自动发现 | `application/src/task/service.rs:143-146` |
 | skill runtime 为 placeholder | `prepare` / `use` / `check_prepare_status` 返回 `AdapterUnavailable` | `infrastructure/src/runtime/macos.rs:3`、`windows.rs:3` |
 | `skill override` 未实现 | 调用即返回 `AdapterUnavailable` | `application/src/task_skills/service.rs:146` |
 | JSON presenter 不在 V1 范围 | 无 JSON 输出能力 | `cli/src/presenters/json.rs:1` |

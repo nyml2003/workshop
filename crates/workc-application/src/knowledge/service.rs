@@ -4,22 +4,51 @@ use workc_domain::knowledge::{KnowledgeEntry, KnowledgeRepository, KnowledgeSour
 use workc_domain::shared::{KnowledgeCandidateId, KnowledgeId, TaskId};
 
 use super::dtos::{
-    CandidateMutationResult, CreateKnowledgeCandidateCommand, DeleteKnowledgeCandidateCommand, DeleteKnowledgeCommand,
-    KnowledgeMutationResult, KnowledgeObjectSummary, ListKnowledgeCandidatesQuery, ListKnowledgeQuery, PromoteKnowledgeCommand,
-    PromoteKnowledgeResult, ShowKnowledgeCandidateQuery, ShowKnowledgeQuery, UpdateKnowledgeCandidateMetaCommand, UpdateKnowledgeMetaCommand,
+    CandidateMutationResult, CreateKnowledgeCandidateCommand, DeleteKnowledgeCandidateCommand,
+    DeleteKnowledgeCommand, KnowledgeMutationResult, KnowledgeObjectSummary,
+    ListKnowledgeCandidatesQuery, ListKnowledgeQuery, PromoteKnowledgeCommand,
+    PromoteKnowledgeResult, ShowKnowledgeCandidateQuery, ShowKnowledgeQuery,
+    UpdateKnowledgeCandidateMetaCommand, UpdateKnowledgeMetaCommand,
 };
 
 pub trait KnowledgeApplicationService {
-    fn create_candidate(&self, command: CreateKnowledgeCandidateCommand) -> Result<CandidateMutationResult, ApplicationError>;
-    fn list_candidates(&self, query: ListKnowledgeCandidatesQuery) -> Result<Vec<KnowledgeObjectSummary>, ApplicationError>;
-    fn show_candidate(&self, query: ShowKnowledgeCandidateQuery) -> Result<Option<KnowledgeObjectSummary>, ApplicationError>;
-    fn update_candidate_meta(&self, command: UpdateKnowledgeCandidateMetaCommand) -> Result<CandidateMutationResult, ApplicationError>;
-    fn delete_candidate(&self, command: DeleteKnowledgeCandidateCommand) -> Result<(), ApplicationError>;
-    fn list_knowledge(&self, query: ListKnowledgeQuery) -> Result<Vec<KnowledgeObjectSummary>, ApplicationError>;
-    fn show_knowledge(&self, query: ShowKnowledgeQuery) -> Result<Option<KnowledgeObjectSummary>, ApplicationError>;
-    fn update_knowledge_meta(&self, command: UpdateKnowledgeMetaCommand) -> Result<KnowledgeMutationResult, ApplicationError>;
+    fn create_candidate(
+        &self,
+        command: CreateKnowledgeCandidateCommand,
+    ) -> Result<CandidateMutationResult, ApplicationError>;
+    fn list_candidates(
+        &self,
+        query: ListKnowledgeCandidatesQuery,
+    ) -> Result<Vec<KnowledgeObjectSummary>, ApplicationError>;
+    fn show_candidate(
+        &self,
+        query: ShowKnowledgeCandidateQuery,
+    ) -> Result<Option<KnowledgeObjectSummary>, ApplicationError>;
+    fn update_candidate_meta(
+        &self,
+        command: UpdateKnowledgeCandidateMetaCommand,
+    ) -> Result<CandidateMutationResult, ApplicationError>;
+    fn delete_candidate(
+        &self,
+        command: DeleteKnowledgeCandidateCommand,
+    ) -> Result<(), ApplicationError>;
+    fn list_knowledge(
+        &self,
+        query: ListKnowledgeQuery,
+    ) -> Result<Vec<KnowledgeObjectSummary>, ApplicationError>;
+    fn show_knowledge(
+        &self,
+        query: ShowKnowledgeQuery,
+    ) -> Result<Option<KnowledgeObjectSummary>, ApplicationError>;
+    fn update_knowledge_meta(
+        &self,
+        command: UpdateKnowledgeMetaCommand,
+    ) -> Result<KnowledgeMutationResult, ApplicationError>;
     fn delete_knowledge(&self, command: DeleteKnowledgeCommand) -> Result<(), ApplicationError>;
-    fn promote(&self, command: PromoteKnowledgeCommand) -> Result<PromoteKnowledgeResult, ApplicationError>;
+    fn promote(
+        &self,
+        command: PromoteKnowledgeCommand,
+    ) -> Result<PromoteKnowledgeResult, ApplicationError>;
 }
 
 pub struct DefaultKnowledgeApplicationService {
@@ -28,11 +57,16 @@ pub struct DefaultKnowledgeApplicationService {
 }
 
 impl DefaultKnowledgeApplicationService {
-    pub fn new(repository: Box<dyn KnowledgeRepository>, clock: Box<dyn crate::ports::Clock>) -> Self {
+    pub fn new(
+        repository: Box<dyn KnowledgeRepository>,
+        clock: Box<dyn crate::ports::Clock>,
+    ) -> Self {
         Self { repository, clock }
     }
 
-    fn to_summary_candidate(candidate: workc_domain::knowledge::KnowledgeCandidate) -> KnowledgeObjectSummary {
+    fn to_summary_candidate(
+        candidate: workc_domain::knowledge::KnowledgeCandidate,
+    ) -> KnowledgeObjectSummary {
         KnowledgeObjectSummary {
             id: candidate.id.to_string(),
             title: candidate.title,
@@ -56,7 +90,10 @@ impl DefaultKnowledgeApplicationService {
 }
 
 impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
-    fn create_candidate(&self, command: CreateKnowledgeCandidateCommand) -> Result<CandidateMutationResult, ApplicationError> {
+    fn create_candidate(
+        &self,
+        command: CreateKnowledgeCandidateCommand,
+    ) -> Result<CandidateMutationResult, ApplicationError> {
         let now = self.clock.now();
         let candidate = workc_domain::knowledge::KnowledgeCandidate {
             id: KnowledgeCandidateId::from(command.candidate_id.as_str()),
@@ -87,7 +124,10 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
         })
     }
 
-    fn list_candidates(&self, query: ListKnowledgeCandidatesQuery) -> Result<Vec<KnowledgeObjectSummary>, ApplicationError> {
+    fn list_candidates(
+        &self,
+        query: ListKnowledgeCandidatesQuery,
+    ) -> Result<Vec<KnowledgeObjectSummary>, ApplicationError> {
         Ok(self
             .repository
             .list_candidates(&TaskId::from(query.task_id.as_str()))?
@@ -96,7 +136,10 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
             .collect())
     }
 
-    fn show_candidate(&self, query: ShowKnowledgeCandidateQuery) -> Result<Option<KnowledgeObjectSummary>, ApplicationError> {
+    fn show_candidate(
+        &self,
+        query: ShowKnowledgeCandidateQuery,
+    ) -> Result<Option<KnowledgeObjectSummary>, ApplicationError> {
         Ok(self
             .repository
             .find_candidate(
@@ -106,16 +149,21 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
             .map(Self::to_summary_candidate))
     }
 
-    fn update_candidate_meta(&self, command: UpdateKnowledgeCandidateMetaCommand) -> Result<CandidateMutationResult, ApplicationError> {
+    fn update_candidate_meta(
+        &self,
+        command: UpdateKnowledgeCandidateMetaCommand,
+    ) -> Result<CandidateMutationResult, ApplicationError> {
         let task_id = TaskId::from(command.task_id.as_str());
         let candidate_id = KnowledgeCandidateId::from(command.candidate_id.as_str());
         let mut candidate = self
             .repository
             .find_candidate(&task_id, &candidate_id)?
-            .ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
-                entity: "knowledge-candidate",
-                id: candidate_id.to_string(),
-            }))?;
+            .ok_or_else(|| {
+                ApplicationError::Domain(DomainError::NotFound {
+                    entity: "knowledge-candidate",
+                    id: candidate_id.to_string(),
+                })
+            })?;
 
         if let Some(title) = command.title {
             candidate.title = title;
@@ -134,7 +182,10 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
         })
     }
 
-    fn delete_candidate(&self, command: DeleteKnowledgeCandidateCommand) -> Result<(), ApplicationError> {
+    fn delete_candidate(
+        &self,
+        command: DeleteKnowledgeCandidateCommand,
+    ) -> Result<(), ApplicationError> {
         self.repository.delete_candidate(
             &TaskId::from(command.task_id.as_str()),
             &KnowledgeCandidateId::from(command.candidate_id.as_str()),
@@ -142,26 +193,40 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
         Ok(())
     }
 
-    fn list_knowledge(&self, _query: ListKnowledgeQuery) -> Result<Vec<KnowledgeObjectSummary>, ApplicationError> {
-        Ok(self.repository.load()?.entries.into_iter().map(Self::to_summary_entry).collect())
+    fn list_knowledge(
+        &self,
+        _query: ListKnowledgeQuery,
+    ) -> Result<Vec<KnowledgeObjectSummary>, ApplicationError> {
+        Ok(self
+            .repository
+            .load()?
+            .entries
+            .into_iter()
+            .map(Self::to_summary_entry)
+            .collect())
     }
 
-    fn show_knowledge(&self, query: ShowKnowledgeQuery) -> Result<Option<KnowledgeObjectSummary>, ApplicationError> {
+    fn show_knowledge(
+        &self,
+        query: ShowKnowledgeQuery,
+    ) -> Result<Option<KnowledgeObjectSummary>, ApplicationError> {
         Ok(self
             .repository
             .find_entry(&KnowledgeId::from(query.knowledge_id.as_str()))?
             .map(Self::to_summary_entry))
     }
 
-    fn update_knowledge_meta(&self, command: UpdateKnowledgeMetaCommand) -> Result<KnowledgeMutationResult, ApplicationError> {
+    fn update_knowledge_meta(
+        &self,
+        command: UpdateKnowledgeMetaCommand,
+    ) -> Result<KnowledgeMutationResult, ApplicationError> {
         let knowledge_id = KnowledgeId::from(command.knowledge_id.as_str());
-        let mut entry = self
-            .repository
-            .find_entry(&knowledge_id)?
-            .ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
+        let mut entry = self.repository.find_entry(&knowledge_id)?.ok_or_else(|| {
+            ApplicationError::Domain(DomainError::NotFound {
                 entity: "knowledge",
                 id: knowledge_id.to_string(),
-            }))?;
+            })
+        })?;
 
         if let Some(title) = command.title {
             entry.title = title;
@@ -180,22 +245,26 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
     }
 
     fn delete_knowledge(&self, command: DeleteKnowledgeCommand) -> Result<(), ApplicationError> {
-        self.repository.delete_entry(&KnowledgeId::from(command.knowledge_id.as_str()))?;
+        self.repository
+            .delete_entry(&KnowledgeId::from(command.knowledge_id.as_str()))?;
         Ok(())
     }
 
-    fn promote(&self, command: PromoteKnowledgeCommand) -> Result<PromoteKnowledgeResult, ApplicationError> {
+    fn promote(
+        &self,
+        command: PromoteKnowledgeCommand,
+    ) -> Result<PromoteKnowledgeResult, ApplicationError> {
         let task_id = TaskId::from(command.task_id.as_str());
         let candidate_id = KnowledgeCandidateId::from(command.candidate_id.as_str());
         let knowledge_id = KnowledgeId::from(command.knowledge_id.as_str());
-        self.repository.promote_candidate(&task_id, &candidate_id, &knowledge_id)?;
-        let mut entry = self
-            .repository
-            .find_entry(&knowledge_id)?
-            .ok_or_else(|| ApplicationError::Domain(DomainError::NotFound {
+        self.repository
+            .promote_candidate(&task_id, &candidate_id, &knowledge_id)?;
+        let mut entry = self.repository.find_entry(&knowledge_id)?.ok_or_else(|| {
+            ApplicationError::Domain(DomainError::NotFound {
                 entity: "knowledge",
                 id: knowledge_id.to_string(),
-            }))?;
+            })
+        })?;
         if let Some(title) = command.title {
             entry.title = title;
         }
@@ -256,7 +325,10 @@ mod tests {
             Ok(())
         }
 
-        fn list_candidates(&self, task_id: &TaskId) -> Result<Vec<KnowledgeCandidate>, DomainError> {
+        fn list_candidates(
+            &self,
+            task_id: &TaskId,
+        ) -> Result<Vec<KnowledgeCandidate>, DomainError> {
             let prefix = task_id.to_string();
             Ok(self
                 .candidates
@@ -275,7 +347,11 @@ mod tests {
             Ok(())
         }
 
-        fn update_candidate(&self, _task_id: &TaskId, candidate: &KnowledgeCandidate) -> Result<(), DomainError> {
+        fn update_candidate(
+            &self,
+            _task_id: &TaskId,
+            candidate: &KnowledgeCandidate,
+        ) -> Result<(), DomainError> {
             self.candidates.borrow_mut().insert(
                 (candidate.task_id.to_string(), candidate.id.to_string()),
                 candidate.clone(),
@@ -283,7 +359,11 @@ mod tests {
             Ok(())
         }
 
-        fn delete_candidate(&self, task_id: &TaskId, candidate_id: &KnowledgeCandidateId) -> Result<(), DomainError> {
+        fn delete_candidate(
+            &self,
+            task_id: &TaskId,
+            candidate_id: &KnowledgeCandidateId,
+        ) -> Result<(), DomainError> {
             self.candidates
                 .borrow_mut()
                 .remove(&(task_id.to_string(), candidate_id.to_string()));
@@ -326,12 +406,12 @@ mod tests {
             candidate_id: &KnowledgeCandidateId,
             knowledge_id: &KnowledgeId,
         ) -> Result<(), DomainError> {
-            let candidate = self
-                .find_candidate(task_id, candidate_id)?
-                .ok_or_else(|| DomainError::NotFound {
+            let candidate = self.find_candidate(task_id, candidate_id)?.ok_or_else(|| {
+                DomainError::NotFound {
                     entity: "knowledge-candidate",
                     id: candidate_id.to_string(),
-                })?;
+                }
+            })?;
             let entry = KnowledgeEntry {
                 id: knowledge_id.clone(),
                 title: candidate.title,
@@ -347,7 +427,13 @@ mod tests {
         }
 
         fn find_entry(&self, id: &KnowledgeId) -> Result<Option<KnowledgeEntry>, DomainError> {
-            Ok(self.base.borrow().entries.iter().find(|e| e.id == *id).cloned())
+            Ok(self
+                .base
+                .borrow()
+                .entries
+                .iter()
+                .find(|e| e.id == *id)
+                .cloned())
         }
     }
 
@@ -360,7 +446,10 @@ mod tests {
     }
 
     fn service() -> DefaultKnowledgeApplicationService {
-        DefaultKnowledgeApplicationService::new(Box::new(InMemoryKnowledgeRepository::new()), Box::new(FixedClock))
+        DefaultKnowledgeApplicationService::new(
+            Box::new(InMemoryKnowledgeRepository::new()),
+            Box::new(FixedClock),
+        )
     }
 
     #[test]

@@ -69,7 +69,8 @@ impl RepoCatalogRepository for FsRepoCatalogRepository {
         }
 
         let repos = if self.catalog_path().exists() {
-            let raw = fs::read_to_string(self.catalog_path()).map_err(io_error("read repo catalog"))?;
+            let raw =
+                fs::read_to_string(self.catalog_path()).map_err(io_error("read repo catalog"))?;
             toml::from_str::<CatalogToml>(&raw)
                 .map_err(invalid_toml("catalog.toml"))?
                 .repos
@@ -86,7 +87,8 @@ impl RepoCatalogRepository for FsRepoCatalogRepository {
         };
 
         let groups = if self.groups_path().exists() {
-            let raw = fs::read_to_string(self.groups_path()).map_err(io_error("read repo groups"))?;
+            let raw =
+                fs::read_to_string(self.groups_path()).map_err(io_error("read repo groups"))?;
             toml::from_str::<GroupsToml>(&raw)
                 .map_err(invalid_toml("groups.toml"))?
                 .groups
@@ -151,7 +153,11 @@ impl RepoCatalogRepository for FsRepoCatalogRepository {
     }
 
     fn find_group(&self, id: &RepoGroupId) -> Result<Option<RepoGroup>, DomainError> {
-        Ok(self.load()?.groups.into_iter().find(|group| group.id == *id))
+        Ok(self
+            .load()?
+            .groups
+            .into_iter()
+            .find(|group| group.id == *id))
     }
 }
 
@@ -180,7 +186,7 @@ fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> Domain
 mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use workc_domain::repo_catalog::{RepoCatalog, RepoEntry, RepoGroup, RepoCatalogRepository};
+    use workc_domain::repo_catalog::{RepoCatalog, RepoCatalogRepository, RepoEntry, RepoGroup};
 
     use super::*;
 
@@ -189,7 +195,10 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        Utf8PathBuf::from_path_buf(std::env::temp_dir().join(format!("workc-repo-catalog-{unique}"))).unwrap()
+        Utf8PathBuf::from_path_buf(
+            std::env::temp_dir().join(format!("workc-repo-catalog-{unique}")),
+        )
+        .unwrap()
     }
 
     #[test]

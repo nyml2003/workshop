@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
 use workc_domain::errors::DomainError;
 use workc_domain::shared::{SkillId, SkillSourceId, SkillVersion, Timestamp};
-use workc_domain::skill_registry::{SkillDefinition, SkillRegistry, SkillRegistryRepository, SkillSource, SkillSourceKind};
+use workc_domain::skill_registry::{
+    SkillDefinition, SkillRegistry, SkillRegistryRepository, SkillSource, SkillSourceKind,
+};
 
 pub struct FsSkillRegistryRepository {
     workspace_root: Utf8PathBuf,
@@ -109,7 +111,8 @@ impl SkillRegistryRepository for FsSkillRegistryRepository {
         }
 
         let sources = if self.sources_path().exists() {
-            let raw = fs::read_to_string(self.sources_path()).map_err(io_error("read skill sources"))?;
+            let raw =
+                fs::read_to_string(self.sources_path()).map_err(io_error("read skill sources"))?;
             toml::from_str::<SourcesToml>(&raw)
                 .map_err(invalid_toml("sources.toml"))?
                 .sources
@@ -129,7 +132,8 @@ impl SkillRegistryRepository for FsSkillRegistryRepository {
         };
 
         let skills = if self.skills_path().exists() {
-            let raw = fs::read_to_string(self.skills_path()).map_err(io_error("read skills index"))?;
+            let raw =
+                fs::read_to_string(self.skills_path()).map_err(io_error("read skills index"))?;
             toml::from_str::<SkillsToml>(&raw)
                 .map_err(invalid_toml("skills.toml"))?
                 .skills
@@ -193,11 +197,19 @@ impl SkillRegistryRepository for FsSkillRegistryRepository {
     }
 
     fn find_source(&self, id: &SkillSourceId) -> Result<Option<SkillSource>, DomainError> {
-        Ok(self.load()?.sources.into_iter().find(|source| source.id == *id))
+        Ok(self
+            .load()?
+            .sources
+            .into_iter()
+            .find(|source| source.id == *id))
     }
 
     fn find_skill(&self, id: &SkillId) -> Result<Option<SkillDefinition>, DomainError> {
-        Ok(self.load()?.skills.into_iter().find(|skill| skill.id == *id))
+        Ok(self
+            .load()?
+            .skills
+            .into_iter()
+            .find(|skill| skill.id == *id))
     }
 }
 

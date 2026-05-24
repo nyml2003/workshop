@@ -34,12 +34,16 @@ impl Display for DomainError {
         match self {
             Self::NotFound { entity, id } => write!(f, "{entity} not found: {id}"),
             Self::AlreadyExists { entity, id } => write!(f, "{entity} already exists: {id}"),
-            Self::InvalidInput { field, reason } => write!(f, "invalid input for {field}: {reason}"),
+            Self::InvalidInput { field, reason } => {
+                write!(f, "invalid input for {field}: {reason}")
+            }
             Self::Conflict { entity, reason } => write!(f, "{entity} conflict: {reason}"),
             Self::ExternalCommandFailed { command, detail } => {
                 write!(f, "external command failed ({command}): {detail}")
             }
-            Self::IoError { operation, detail } => write!(f, "io error during {operation}: {detail}"),
+            Self::IoError { operation, detail } => {
+                write!(f, "io error during {operation}: {detail}")
+            }
         }
     }
 }
@@ -74,7 +78,10 @@ mod tests {
             field: "slug",
             reason: "slug cannot be empty".to_owned(),
         };
-        assert_eq!(err.to_string(), "invalid input for slug: slug cannot be empty");
+        assert_eq!(
+            err.to_string(),
+            "invalid input for slug: slug cannot be empty"
+        );
     }
 
     #[test]
@@ -104,6 +111,9 @@ mod tests {
             operation: "create dir",
             detail: "permission denied".to_owned(),
         };
-        assert_eq!(err.to_string(), "io error during create dir: permission denied");
+        assert_eq!(
+            err.to_string(),
+            "io error during create dir: permission denied"
+        );
     }
 }

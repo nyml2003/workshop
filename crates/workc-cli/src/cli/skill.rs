@@ -1,15 +1,17 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand, ValueEnum};
 use workc_application::skill_registry::{
-    ApplicationSkillSourceKind, DefaultSkillRegistryApplicationService, ImportSkillSourceCommand, ImportedSkillDefinition,
-    ShowSkillQuery, SkillRegistryApplicationService,
+    ApplicationSkillSourceKind, DefaultSkillRegistryApplicationService, ImportSkillSourceCommand,
+    ImportedSkillDefinition, ShowSkillQuery, SkillRegistryApplicationService,
 };
 use workc_application::task_skills::{
     CheckSkillUpdatesQuery, DefaultTaskSkillsApplicationService, MountSkillCommand,
     TaskSkillsApplicationService, UnmountSkillCommand,
 };
-use workc_infrastructure::fs::{FsSkillRegistryRepository, FsTaskRepository, FsTaskSkillMountRepository};
+use workc_infrastructure::fs::{
+    FsSkillRegistryRepository, FsTaskRepository, FsTaskSkillMountRepository,
+};
 use workc_infrastructure::time::system_clock::SystemClock;
 
 use crate::presenters::Presenter;
@@ -120,29 +122,33 @@ pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
                 kind: to_source_kind(args.kind),
                 location: args.location,
                 reference: args.version.clone(),
-                skills: args
-                    .skill_id
-                    .map(|skill_id| {
-                        vec![ImportedSkillDefinition {
-                            id: skill_id,
-                            versions: args.version.clone().into_iter().collect(),
-                            latest: args.version,
-                        }]
-                    })
-                    .unwrap_or_default(),
+                skills: {
+                    let version = args.version.clone();
+                    let versions: Vec<String> = version.clone().into_iter().collect();
+                    let skill_id = args.skill_id.clone().unwrap_or(args.source_id.clone());
+                    vec![ImportedSkillDefinition {
+                        id: skill_id,
+                        versions,
+                        latest: version,
+                    }]
+                },
             })?;
             Ok(presenter.render_message(&format!("Imported skill source {}", args.source_id)))
         }
         SkillCommand::Show(args) => {
             let service = registry_service()?;
-            let skill = service.show_skill(ShowSkillQuery { skill_id: args.skill_id })?;
+            let skill = service.show_skill(ShowSkillQuery {
+                skill_id: args.skill_id,
+            })?;
             Ok(skill
                 .map(|item| presenter.render_skill_summary(&item))
                 .unwrap_or_else(|| presenter.render_message("Skill not found.")))
         }
         SkillCommand::Versions(args) => {
             let service = registry_service()?;
-            let versions = service.list_skill_versions(ShowSkillQuery { skill_id: args.skill_id })?;
+            let versions = service.list_skill_versions(ShowSkillQuery {
+                skill_id: args.skill_id,
+            })?;
             Ok(presenter.render_skill_versions(&versions))
         }
         SkillCommand::Mount(args) => {
@@ -159,7 +165,8 @@ pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
             if !args.task.starts_with("task-") {
                 return Err(anyhow!("skill mounts currently requires a task-id"));
             }
-            let mounts = service.list_mounts(&workc_application::task::TaskId::from(args.task.as_str()))?;
+            let mounts =
+                service.list_mounts(&workc_application::task::TaskId::from(args.task.as_str()))?;
             Ok(presenter.render_skill_mounts(&mounts))
         }
         SkillCommand::Unmount(args) => {

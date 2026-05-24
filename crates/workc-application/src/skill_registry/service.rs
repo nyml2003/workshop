@@ -1,10 +1,14 @@
 use workc_domain::errors::DomainError;
 use workc_domain::shared::{SkillId, SkillSourceId, SkillVersion};
-use workc_domain::skill_registry::{SkillDefinition, SkillRegistryRepository, SkillSource, SkillSourceKind};
+use workc_domain::skill_registry::{
+    SkillDefinition, SkillRegistryRepository, SkillSource, SkillSourceKind,
+};
 
 use crate::error::ApplicationError;
 
-use super::dtos::{ApplicationSkillSourceKind, ImportSkillSourceCommand, ShowSkillQuery, SkillSummary};
+use super::dtos::{
+    ApplicationSkillSourceKind, ImportSkillSourceCommand, ShowSkillQuery, SkillSummary,
+};
 
 pub trait SkillRegistryApplicationService {
     fn import_source(&self, command: ImportSkillSourceCommand) -> Result<(), ApplicationError>;
@@ -18,7 +22,10 @@ pub struct DefaultSkillRegistryApplicationService {
 }
 
 impl DefaultSkillRegistryApplicationService {
-    pub fn new(repository: Box<dyn SkillRegistryRepository>, clock: Box<dyn crate::ports::Clock>) -> Self {
+    pub fn new(
+        repository: Box<dyn SkillRegistryRepository>,
+        clock: Box<dyn crate::ports::Clock>,
+    ) -> Self {
         Self { repository, clock }
     }
 
@@ -54,7 +61,11 @@ impl SkillRegistryApplicationService for DefaultSkillRegistryApplicationService 
 
         for skill in command.skills {
             let skill_id = SkillId::from(skill.id.as_str());
-            if registry.skills.iter().any(|existing| existing.id == skill_id) {
+            if registry
+                .skills
+                .iter()
+                .any(|existing| existing.id == skill_id)
+            {
                 return Err(ApplicationError::Domain(DomainError::AlreadyExists {
                     entity: "skill",
                     id: skill_id.to_string(),
@@ -80,7 +91,11 @@ impl SkillRegistryApplicationService for DefaultSkillRegistryApplicationService 
             .map(|skill| SkillSummary {
                 id: skill.id.to_string(),
                 source: skill.source.to_string(),
-                versions: skill.versions.into_iter().map(|version| version.to_string()).collect(),
+                versions: skill
+                    .versions
+                    .into_iter()
+                    .map(|version| version.to_string())
+                    .collect(),
                 latest: skill.latest.map(|version| version.to_string()),
             }))
     }
@@ -89,7 +104,13 @@ impl SkillRegistryApplicationService for DefaultSkillRegistryApplicationService 
         Ok(self
             .repository
             .find_skill(&SkillId::from(query.skill_id.as_str()))?
-            .map(|skill| skill.versions.into_iter().map(|version| version.to_string()).collect())
+            .map(|skill| {
+                skill
+                    .versions
+                    .into_iter()
+                    .map(|version| version.to_string())
+                    .collect()
+            })
             .unwrap_or_default())
     }
 }
@@ -99,13 +120,13 @@ mod tests {
     use std::cell::RefCell;
 
     use time::OffsetDateTime;
-    use workc_domain::skill_registry::{SkillDefinition, SkillRegistryRepository, SkillSource};
     use workc_domain::shared::{SkillId, SkillSourceId};
+    use workc_domain::skill_registry::{SkillDefinition, SkillRegistryRepository, SkillSource};
 
     use crate::ports::Clock;
 
-    use crate::skill_registry::ImportedSkillDefinition;
     use super::*;
+    use crate::skill_registry::ImportedSkillDefinition;
 
     struct InMemorySkillRegistryRepository {
         registry: RefCell<workc_domain::skill_registry::SkillRegistry>,
@@ -124,17 +145,32 @@ mod tests {
             Ok(self.registry.borrow().clone())
         }
 
-        fn save(&self, registry: &workc_domain::skill_registry::SkillRegistry) -> Result<(), DomainError> {
+        fn save(
+            &self,
+            registry: &workc_domain::skill_registry::SkillRegistry,
+        ) -> Result<(), DomainError> {
             *self.registry.borrow_mut() = registry.clone();
             Ok(())
         }
 
         fn find_source(&self, id: &SkillSourceId) -> Result<Option<SkillSource>, DomainError> {
-            Ok(self.registry.borrow().sources.iter().find(|source| source.id == *id).cloned())
+            Ok(self
+                .registry
+                .borrow()
+                .sources
+                .iter()
+                .find(|source| source.id == *id)
+                .cloned())
         }
 
         fn find_skill(&self, id: &SkillId) -> Result<Option<SkillDefinition>, DomainError> {
-            Ok(self.registry.borrow().skills.iter().find(|skill| skill.id == *id).cloned())
+            Ok(self
+                .registry
+                .borrow()
+                .skills
+                .iter()
+                .find(|skill| skill.id == *id)
+                .cloned())
         }
     }
 
@@ -201,7 +237,9 @@ mod tests {
             reference: None,
             skills: vec![],
         });
-        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "skill-source"));
+        assert!(
+            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "skill-source")
+        );
     }
 
     #[test]
@@ -235,7 +273,9 @@ mod tests {
                 latest: None,
             }],
         });
-        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "skill"));
+        assert!(
+            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "skill")
+        );
     }
 
     #[test]
@@ -244,7 +284,11 @@ mod tests {
             Box::new(InMemorySkillRegistryRepository::default()),
             Box::new(FixedClock),
         );
-        let result = service.show_skill(ShowSkillQuery { skill_id: "nonexistent".to_owned() }).unwrap();
+        let result = service
+            .show_skill(ShowSkillQuery {
+                skill_id: "nonexistent".to_owned(),
+            })
+            .unwrap();
         assert!(result.is_none());
     }
 
@@ -255,7 +299,9 @@ mod tests {
             Box::new(FixedClock),
         );
         let versions = service
-            .list_skill_versions(ShowSkillQuery { skill_id: "nonexistent".to_owned() })
+            .list_skill_versions(ShowSkillQuery {
+                skill_id: "nonexistent".to_owned(),
+            })
             .unwrap();
         assert!(versions.is_empty());
     }

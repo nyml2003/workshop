@@ -37,11 +37,11 @@
 
 ### 初始 skill mount
 
-`task create --skills` 在 CLI 中已声明参数，但服务层拒绝处理。应打通从任务创建到技能挂载的完整链路：创建任务后自动挂载指定的初始技能。
+`task create --skills` 参数已打通：服务层不再拦截，CLI 在任务创建后自动挂载指定技能。但挂载要求技能已预先通过 `skill import` 导入到注册表，否则 mount 报 "skill not found"。后续可优化为创建时自动确保技能可用。
 
-### repo-group 在 task create 阶段的真正接入
+### repo-group 在 task create 阶段的 enrichment
 
-`task create --repo-groups` 同 `--skills` 一样已声明参数但被服务层拦截。应实现 repo-group 的解析与 enrichment，在创建时自动填充任务的仓库选择。
+`task create --repo-groups` 已正常接受参数并存储。剩余缺口是将 repo-group 在创建时展开为具体 repo 列表，而非后续单独操作。
 
 ### runtime 实现补全
 

@@ -109,18 +109,28 @@ impl GitClient for CommandGitClient {
 
         if !branch_output.status.success() {
             return Err(GitError {
-                detail: format!("git branch --show-current failed with status {}", branch_output.status),
+                detail: format!(
+                    "git branch --show-current failed with status {}",
+                    branch_output.status
+                ),
             });
         }
 
         if !status_output.status.success() {
             return Err(GitError {
-                detail: format!("git status --porcelain failed with status {}", status_output.status),
+                detail: format!(
+                    "git status --porcelain failed with status {}",
+                    status_output.status
+                ),
             });
         }
 
-        let branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_owned();
-        let dirty = !String::from_utf8_lossy(&status_output.stdout).trim().is_empty();
+        let branch = String::from_utf8_lossy(&branch_output.stdout)
+            .trim()
+            .to_owned();
+        let dirty = !String::from_utf8_lossy(&status_output.stdout)
+            .trim()
+            .is_empty();
 
         let (behind, ahead) = Self::ahead_behind(path).unwrap_or((0, 0));
 
@@ -129,7 +139,11 @@ impl GitClient for CommandGitClient {
             dirty,
             ahead,
             behind,
-            clone_state: if dirty { CloneState::Dirty } else { CloneState::Ready },
+            clone_state: if dirty {
+                CloneState::Dirty
+            } else {
+                CloneState::Ready
+            },
         })
     }
 
@@ -183,7 +197,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        Utf8PathBuf::from_path_buf(std::env::temp_dir().join(format!("workc-git-status-{unique}"))).unwrap()
+        Utf8PathBuf::from_path_buf(std::env::temp_dir().join(format!("workc-git-status-{unique}")))
+            .unwrap()
     }
 
     #[test]

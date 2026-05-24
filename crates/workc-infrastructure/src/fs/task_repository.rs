@@ -2,9 +2,9 @@ use std::fs;
 
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
-use time::{Date, PrimitiveDateTime, Time, UtcOffset};
-use time::macros::format_description;
 use time::format_description::well_known::Rfc3339;
+use time::macros::format_description;
+use time::{Date, PrimitiveDateTime, Time, UtcOffset};
 use workc_domain::errors::DomainError;
 use workc_domain::shared::{RepoGroupId, RepoId, TaskId, TaskSlug, Timestamp};
 use workc_domain::task::{TaskIdGenerator, TaskRepository, TaskWorkspace};
@@ -73,7 +73,8 @@ impl FsTaskRepository {
     fn write_default_files(&self, task: &TaskWorkspace) -> Result<(), DomainError> {
         let task_root = self.task_root(&task.meta.id);
         fs::create_dir_all(task_root.join("repos")).map_err(io_error("create repos dir"))?;
-        fs::create_dir_all(task_root.join("materials")).map_err(io_error("create materials dir"))?;
+        fs::create_dir_all(task_root.join("materials"))
+            .map_err(io_error("create materials dir"))?;
         fs::create_dir_all(task_root.join("knowledge-candidates"))
             .map_err(io_error("create knowledge candidates dir"))?;
         fs::create_dir_all(task_root.join(".codex").join("skills"))
@@ -150,7 +151,7 @@ impl FsTaskRepository {
                 return Err(DomainError::InvalidInput {
                     field: "status",
                     reason: format!("unknown task status: {other}"),
-                })
+                });
             }
         };
 
@@ -206,15 +207,19 @@ impl TaskRepository for FsTaskRepository {
         }
 
         let raw = fs::read_to_string(&path).map_err(io_error("read task.toml"))?;
-        let parsed = toml::from_str::<TaskToml>(&raw).map_err(|error| DomainError::InvalidInput {
-            field: "task.toml",
-            reason: error.to_string(),
-        })?;
+        let parsed =
+            toml::from_str::<TaskToml>(&raw).map_err(|error| DomainError::InvalidInput {
+                field: "task.toml",
+                reason: error.to_string(),
+            })?;
         Ok(Some(Self::from_toml(parsed)?))
     }
 
     fn find_by_slug(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
-        Ok(self.list()?.into_iter().find(|task| task.meta.slug == *slug))
+        Ok(self
+            .list()?
+            .into_iter()
+            .find(|task| task.meta.slug == *slug))
     }
 
     fn list(&self) -> Result<Vec<TaskWorkspace>, DomainError> {
@@ -231,10 +236,11 @@ impl TaskRepository for FsTaskRepository {
                 continue;
             }
             let raw = fs::read_to_string(&path).map_err(io_error("read task.toml"))?;
-            let parsed = toml::from_str::<TaskToml>(&raw).map_err(|error| DomainError::InvalidInput {
-                field: "task.toml",
-                reason: error.to_string(),
-            })?;
+            let parsed =
+                toml::from_str::<TaskToml>(&raw).map_err(|error| DomainError::InvalidInput {
+                    field: "task.toml",
+                    reason: error.to_string(),
+                })?;
             tasks.push(Self::from_toml(parsed)?);
         }
 
@@ -245,9 +251,11 @@ impl TaskRepository for FsTaskRepository {
         let task_root = self.task_root(&task.meta.id);
         fs::create_dir_all(&task_root).map_err(io_error("create task root"))?;
         self.write_default_files(task)?;
-        let raw = toml::to_string_pretty(&Self::to_toml(task)?).map_err(|error| DomainError::InvalidInput {
-            field: "task",
-            reason: error.to_string(),
+        let raw = toml::to_string_pretty(&Self::to_toml(task)?).map_err(|error| {
+            DomainError::InvalidInput {
+                field: "task",
+                reason: error.to_string(),
+            }
         })?;
         fs::write(self.task_toml_path(&task.meta.id), raw).map_err(io_error("write task.toml"))?;
         Ok(())
@@ -277,29 +285,35 @@ fn format_timestamp(value: Timestamp) -> Result<String, DomainError> {
 
 fn parse_timestamp_value(value: &TimestampValue) -> Result<Timestamp, DomainError> {
     match value {
-        TimestampValue::String(raw) => Timestamp::parse(raw, &Rfc3339).map_err(|error| DomainError::InvalidInput {
-            field: "timestamp",
-            reason: error.to_string(),
-        }),
+        TimestampValue::String(raw) => {
+            Timestamp::parse(raw, &Rfc3339).map_err(|error| DomainError::InvalidInput {
+                field: "timestamp",
+                reason: error.to_string(),
+            })
+        }
         TimestampValue::Parts(parts) => {
-            let date = Date::from_ordinal_date(parts[0] as i32, parts[1] as u16).map_err(|error| {
-                DomainError::InvalidInput {
-                    field: "timestamp",
-                    reason: error.to_string(),
-                }
+            let date =
+                Date::from_ordinal_date(parts[0] as i32, parts[1] as u16).map_err(|error| {
+                    DomainError::InvalidInput {
+                        field: "timestamp",
+                        reason: error.to_string(),
+                    }
+                })?;
+            let time = Time::from_hms_nano(
+                parts[2] as u8,
+                parts[3] as u8,
+                parts[4] as u8,
+                parts[5] as u32,
+            )
+            .map_err(|error| DomainError::InvalidInput {
+                field: "timestamp",
+                reason: error.to_string(),
             })?;
-            let time = Time::from_hms_nano(parts[2] as u8, parts[3] as u8, parts[4] as u8, parts[5] as u32).map_err(
-                |error| DomainError::InvalidInput {
+            let offset = UtcOffset::from_hms(parts[6] as i8, parts[7] as i8, parts[8] as i8)
+                .map_err(|error| DomainError::InvalidInput {
                     field: "timestamp",
                     reason: error.to_string(),
-                },
-            )?;
-            let offset = UtcOffset::from_hms(parts[6] as i8, parts[7] as i8, parts[8] as i8).map_err(|error| {
-                DomainError::InvalidInput {
-                    field: "timestamp",
-                    reason: error.to_string(),
-                }
-            })?;
+                })?;
             Ok(PrimitiveDateTime::new(date, time).assume_offset(offset))
         }
     }
@@ -366,10 +380,24 @@ mod tests {
         assert!(task_root.join("task.toml").exists());
         assert!(task_root.join("repos").exists());
         assert!(task_root.join("materials").join("README.md").exists());
-        assert!(task_root.join("knowledge-candidates").join("README.md").exists());
-        assert!(task_root.join(".codex").join("skills").join("README.md").exists());
+        assert!(
+            task_root
+                .join("knowledge-candidates")
+                .join("README.md")
+                .exists()
+        );
+        assert!(
+            task_root
+                .join(".codex")
+                .join("skills")
+                .join("README.md")
+                .exists()
+        );
 
-        let loaded = repo.find_by_slug(&TaskSlug::from("auth-session-fix")).unwrap().unwrap();
+        let loaded = repo
+            .find_by_slug(&TaskSlug::from("auth-session-fix"))
+            .unwrap()
+            .unwrap();
         assert_eq!(loaded.meta.template, "default");
         assert_eq!(loaded.repos.repos.len(), 1);
 
@@ -380,7 +408,9 @@ mod tests {
     fn load_accepts_legacy_array_timestamp_format() {
         let workspace_root = temp_workspace();
         let repo = FsTaskRepository::new(workspace_root.clone());
-        let task_root = workspace_root.join("tasks").join("task-20260524-auth-session-fix");
+        let task_root = workspace_root
+            .join("tasks")
+            .join("task-20260524-auth-session-fix");
         fs::create_dir_all(&task_root).unwrap();
         fs::write(
             task_root.join("task.toml"),
@@ -406,7 +436,10 @@ task_skills = ".codex/skills"
         )
         .unwrap();
 
-        let loaded = repo.find_by_slug(&TaskSlug::from("auth-session-fix")).unwrap().unwrap();
+        let loaded = repo
+            .find_by_slug(&TaskSlug::from("auth-session-fix"))
+            .unwrap()
+            .unwrap();
         assert_eq!(loaded.meta.template, "default");
         assert!(loaded.activity.last_activity_at.is_some());
 

@@ -11,6 +11,7 @@ pub struct TaskWorkspace {
 }
 
 impl TaskWorkspace {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         id: TaskId,
         slug: TaskSlug,
@@ -88,7 +89,10 @@ mod tests {
         let task = sample_task();
         assert_eq!(task.activity.created_at, OffsetDateTime::UNIX_EPOCH);
         assert_eq!(task.activity.updated_at, OffsetDateTime::UNIX_EPOCH);
-        assert_eq!(task.activity.last_activity_at, Some(OffsetDateTime::UNIX_EPOCH));
+        assert_eq!(
+            task.activity.last_activity_at,
+            Some(OffsetDateTime::UNIX_EPOCH)
+        );
         assert_eq!(task.activity.last_opened_at, None);
         assert_eq!(task.activity.last_editor, None);
         assert_eq!(task.meta.status, TaskStatus::Active);
@@ -150,7 +154,10 @@ mod tests {
         let task = sample_task();
         assert_eq!(task.paths.materials_dir.as_str(), "materials");
         assert_eq!(task.paths.repos_dir.as_str(), "repos");
-        assert_eq!(task.paths.knowledge_candidates_dir.as_str(), "knowledge-candidates");
+        assert_eq!(
+            task.paths.knowledge_candidates_dir.as_str(),
+            "knowledge-candidates"
+        );
         assert_eq!(task.paths.task_skills_dir.as_str(), ".codex/skills");
     }
 }
