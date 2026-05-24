@@ -19,5 +19,10 @@ camino = { version = "1", features = ["serde1"] }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
-time = { version = "0.3", features = ["formatting", "parsing", "macros", "serde"] }
+time = { version = "0.3", features = [
+  "formatting",
+  "parsing",
+  "macros",
+  "serde",
+] }
 toml = "0.8"
