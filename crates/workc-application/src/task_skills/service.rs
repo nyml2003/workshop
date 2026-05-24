@@ -95,11 +95,8 @@ impl DefaultTaskSkillsApplicationService {
         })
     }
 
-    fn mount_path(task_id: &TaskId, mount_id: &MountId) -> Utf8PathBuf {
-        Utf8PathBuf::from("tasks")
-            .join(task_id.as_str())
-            .join(".codex")
-            .join("skills")
+    fn mount_path(_task_id: &TaskId, mount_id: &MountId) -> Utf8PathBuf {
+        Utf8PathBuf::from("skills")
             .join("mounted")
             .join(mount_id.as_str())
     }

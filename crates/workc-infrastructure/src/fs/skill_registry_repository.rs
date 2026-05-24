@@ -60,6 +60,12 @@ impl FsSkillRegistryRepository {
         paths::workc_skills_registry_root()
     }
 
+    pub fn cache_dir(&self, source_id: &str, version: &str) -> Utf8PathBuf {
+        paths::workc_skills_cache_root()
+            .join(source_id)
+            .join(version)
+    }
+
     pub fn cache_local_source(&self, source_id: &str, version: &str, src_dir: &Utf8Path) -> Result<(), DomainError> {
         let cache_dir = paths::workc_skills_cache_root()
             .join(source_id)

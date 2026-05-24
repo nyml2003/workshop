@@ -1,3 +1,5 @@
+use std::fs;
+
 use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand, ValueEnum};
@@ -158,12 +160,24 @@ pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
             Ok(presenter.render_skill_versions(&versions))
         }
         SkillCommand::Mount(args) => {
+            let workspace_root = workspace_root()?;
             let service = task_skill_service()?;
             let summary = service.mount_skill(MountSkillCommand {
                 task_id: args.task,
-                skill_id: args.skill_id,
+                skill_id: args.skill_id.clone(),
                 version: args.version,
             })?;
+
+            // Copy skill files from global cache to mount directory
+            let reg = FsSkillRegistryRepository::new();
+            let version = summary.version.as_str();
+            let cache_dir = reg.cache_dir(&args.skill_id, version);
+            let mount_dir = workspace_root.join(&summary.path);
+            if cache_dir.exists() {
+                fs::create_dir_all(&mount_dir)?;
+                copy_skill_files(&cache_dir, &mount_dir)?;
+            }
+
             Ok(presenter.render_skill_mount(&summary))
         }
         SkillCommand::Mounts(args) => {
@@ -192,4 +206,20 @@ pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
             Ok(presenter.render_skill_updates(&updates))
         }
     }
+}
+
+fn copy_skill_files(src: &Utf8PathBuf, dst: &Utf8PathBuf) -> Result<()> {
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let name = Utf8PathBuf::from_path_buf(entry.path()).map_err(|_| anyhow!("non-utf8 path"))?;
+        let target = dst.join(name.file_name().unwrap_or_default());
+        if file_type.is_dir() {
+            fs::create_dir_all(&target)?;
+            copy_skill_files(&name, &target)?;
+        } else {
+            fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
 }

@@ -139,9 +139,7 @@ impl DefaultTaskReposApplicationService {
     }
 
     fn task_repo_path(task: &workc_domain::task::TaskWorkspace, repo_id: &RepoId) -> Utf8PathBuf {
-        Utf8PathBuf::from("tasks")
-            .join(task.meta.id.as_str())
-            .join(task.paths.repos_dir.as_str())
+        Utf8PathBuf::from(task.paths.repos_dir.as_str())
             .join(repo_id.as_str())
     }
 
