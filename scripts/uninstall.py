@@ -63,17 +63,18 @@ def main():
     args = sys.argv[1:]
     force = "--yes" in args or "-y" in args
 
-    if not force:
-        if sys.stdin.isatty():
-            print("This will remove ~/.workc/ and clean up PATH entries.")
-            resp = input("Continue? [y/N] ").strip().lower()
-            if resp not in ("y", "yes"):
-                print("Cancelled.")
-                return
-        else:
-            print("This will remove ~/.workc/ and clean up PATH entries.")
-            print("Run with --yes to skip confirmation, or run interactively.")
+    if not force and sys.stdin.isatty():
+        print("This will remove ~/.workc/ and clean up PATH entries.")
+        resp = input("Continue? [y/N] ").strip().lower()
+        if resp not in ("y", "yes"):
+            print("Cancelled.")
             return
+
+    _remove_path_entries()
+    _remove_workc_home()
+    print()
+    print("Uninstall complete.")
+    print("Restart your terminal for PATH changes to take effect.")
 
     _remove_path_entries()
     _remove_workc_home()
