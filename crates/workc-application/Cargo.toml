@@ -1,0 +1,12 @@
+[package]
+name = "workc-application"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+camino.workspace = true
+time.workspace = true
+workc-domain = { path = "../workc-domain" }

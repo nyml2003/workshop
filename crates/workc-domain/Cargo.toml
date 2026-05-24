@@ -1,0 +1,11 @@
+[package]
+name = "workc-domain"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+camino.workspace = true
+thiserror.workspace = true
+time.workspace = true

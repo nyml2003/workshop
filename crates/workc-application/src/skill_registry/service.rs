@@ -1,0 +1,179 @@
+use workc_domain::errors::DomainError;
+use workc_domain::shared::{SkillId, SkillSourceId, SkillVersion};
+use workc_domain::skill_registry::{SkillDefinition, SkillRegistryRepository, SkillSource, SkillSourceKind};
+
+use crate::error::ApplicationError;
+
+use super::dtos::{ApplicationSkillSourceKind, ImportSkillSourceCommand, ShowSkillQuery, SkillSummary};
+
+pub trait SkillRegistryApplicationService {
+    fn import_source(&self, command: ImportSkillSourceCommand) -> Result<(), ApplicationError>;
+    fn show_skill(&self, query: ShowSkillQuery) -> Result<Option<SkillSummary>, ApplicationError>;
+    fn list_skill_versions(&self, query: ShowSkillQuery) -> Result<Vec<String>, ApplicationError>;
+}
+
+pub struct DefaultSkillRegistryApplicationService {
+    repository: Box<dyn SkillRegistryRepository>,
+    clock: Box<dyn crate::ports::Clock>,
+}
+
+impl DefaultSkillRegistryApplicationService {
+    pub fn new(repository: Box<dyn SkillRegistryRepository>, clock: Box<dyn crate::ports::Clock>) -> Self {
+        Self { repository, clock }
+    }
+
+    fn to_source_kind(value: ApplicationSkillSourceKind) -> SkillSourceKind {
+        match value {
+            ApplicationSkillSourceKind::Git => SkillSourceKind::Git,
+            ApplicationSkillSourceKind::Local => SkillSourceKind::Local,
+            ApplicationSkillSourceKind::Archive => SkillSourceKind::Archive,
+            ApplicationSkillSourceKind::Other(value) => SkillSourceKind::Other(value),
+        }
+    }
+}
+
+impl SkillRegistryApplicationService for DefaultSkillRegistryApplicationService {
+    fn import_source(&self, command: ImportSkillSourceCommand) -> Result<(), ApplicationError> {
+        let mut registry = self.repository.load()?;
+        let source_id = SkillSourceId::from(command.source_id.as_str());
+
+        if registry.sources.iter().any(|source| source.id == source_id) {
+            return Err(ApplicationError::Domain(DomainError::AlreadyExists {
+                entity: "skill-source",
+                id: source_id.to_string(),
+            }));
+        }
+
+        registry.sources.push(SkillSource {
+            id: source_id.clone(),
+            kind: Self::to_source_kind(command.kind),
+            location: command.location,
+            reference: command.reference,
+            imported_at: Some(self.clock.now()),
+        });
+
+        for skill in command.skills {
+            let skill_id = SkillId::from(skill.id.as_str());
+            if registry.skills.iter().any(|existing| existing.id == skill_id) {
+                return Err(ApplicationError::Domain(DomainError::AlreadyExists {
+                    entity: "skill",
+                    id: skill_id.to_string(),
+                }));
+            }
+
+            registry.skills.push(SkillDefinition {
+                id: skill_id,
+                source: source_id.clone(),
+                versions: skill.versions.into_iter().map(SkillVersion::from).collect(),
+                latest: skill.latest.map(SkillVersion::from),
+            });
+        }
+
+        self.repository.save(&registry)?;
+        Ok(())
+    }
+
+    fn show_skill(&self, query: ShowSkillQuery) -> Result<Option<SkillSummary>, ApplicationError> {
+        Ok(self
+            .repository
+            .find_skill(&SkillId::from(query.skill_id.as_str()))?
+            .map(|skill| SkillSummary {
+                id: skill.id.to_string(),
+                source: skill.source.to_string(),
+                versions: skill.versions.into_iter().map(|version| version.to_string()).collect(),
+                latest: skill.latest.map(|version| version.to_string()),
+            }))
+    }
+
+    fn list_skill_versions(&self, query: ShowSkillQuery) -> Result<Vec<String>, ApplicationError> {
+        Ok(self
+            .repository
+            .find_skill(&SkillId::from(query.skill_id.as_str()))?
+            .map(|skill| skill.versions.into_iter().map(|version| version.to_string()).collect())
+            .unwrap_or_default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+
+    use time::OffsetDateTime;
+    use workc_domain::skill_registry::{SkillDefinition, SkillRegistryRepository, SkillSource};
+    use workc_domain::shared::{SkillId, SkillSourceId};
+
+    use crate::ports::Clock;
+
+    use super::*;
+
+    struct InMemorySkillRegistryRepository {
+        registry: RefCell<workc_domain::skill_registry::SkillRegistry>,
+    }
+
+    impl Default for InMemorySkillRegistryRepository {
+        fn default() -> Self {
+            Self {
+                registry: RefCell::new(workc_domain::skill_registry::SkillRegistry::default()),
+            }
+        }
+    }
+
+    impl SkillRegistryRepository for InMemorySkillRegistryRepository {
+        fn load(&self) -> Result<workc_domain::skill_registry::SkillRegistry, DomainError> {
+            Ok(self.registry.borrow().clone())
+        }
+
+        fn save(&self, registry: &workc_domain::skill_registry::SkillRegistry) -> Result<(), DomainError> {
+            *self.registry.borrow_mut() = registry.clone();
+            Ok(())
+        }
+
+        fn find_source(&self, id: &SkillSourceId) -> Result<Option<SkillSource>, DomainError> {
+            Ok(self.registry.borrow().sources.iter().find(|source| source.id == *id).cloned())
+        }
+
+        fn find_skill(&self, id: &SkillId) -> Result<Option<SkillDefinition>, DomainError> {
+            Ok(self.registry.borrow().skills.iter().find(|skill| skill.id == *id).cloned())
+        }
+    }
+
+    struct FixedClock;
+
+    impl Clock for FixedClock {
+        fn now(&self) -> OffsetDateTime {
+            OffsetDateTime::UNIX_EPOCH
+        }
+    }
+
+    #[test]
+    fn import_source_persists_source_and_skills() {
+        let service = DefaultSkillRegistryApplicationService::new(
+            Box::new(InMemorySkillRegistryRepository::default()),
+            Box::new(FixedClock),
+        );
+
+        service
+            .import_source(ImportSkillSourceCommand {
+                source_id: "frontend-toolkit".to_owned(),
+                kind: ApplicationSkillSourceKind::Local,
+                location: "C:/skills/frontend-toolkit".to_owned(),
+                reference: Some("2026-05-24".to_owned()),
+                skills: vec![crate::skill_registry::ImportedSkillDefinition {
+                    id: "frontend-testing".to_owned(),
+                    versions: vec!["2026-05-22".to_owned()],
+                    latest: Some("2026-05-22".to_owned()),
+                }],
+            })
+            .unwrap();
+
+        let shown = service
+            .show_skill(ShowSkillQuery {
+                skill_id: "frontend-testing".to_owned(),
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(shown.id, "frontend-testing");
+        assert_eq!(shown.source, "frontend-toolkit");
+    }
+}

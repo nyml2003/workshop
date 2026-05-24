@@ -1,0 +1,15 @@
+[package]
+name = "workc-cli"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+camino.workspace = true
+clap.workspace = true
+serde.workspace = true
+time.workspace = true
+workc-application = { path = "../workc-application" }
+workc-infrastructure = { path = "../workc-infrastructure" }

@@ -1,0 +1,23 @@
+[workspace]
+members = [
+  "crates/workc-domain",
+  "crates/workc-application",
+  "crates/workc-infrastructure",
+  "crates/workc-cli",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+version = "0.1.0"
+rust-version = "1.88"
+
+[workspace.dependencies]
+anyhow = "1"
+camino = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+time = { version = "0.3", features = ["formatting", "parsing", "macros", "serde"] }
+toml = "0.8"
