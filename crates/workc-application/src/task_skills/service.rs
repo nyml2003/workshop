@@ -101,6 +101,12 @@ impl DefaultTaskSkillsApplicationService {
             .join(mount_id.as_str())
     }
 
+    fn mount_skill_path(skill_id: &SkillId) -> Utf8PathBuf {
+        Utf8PathBuf::from(".opencode")
+            .join("skills")
+            .join(skill_id.as_str())
+    }
+
     fn to_summary(task_id: &TaskId, mount: TaskSkillMount) -> SkillMountSummary {
         SkillMountSummary {
             task_id: task_id.to_string(),
@@ -144,12 +150,12 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         let mount_id = MountId::from(format!("mount-{:03}", mounts.len() + 1));
         let mount = TaskSkillMount {
             id: mount_id.clone(),
-            skill_id,
+            skill_id: skill_id.clone(),
             version,
             source: skill.source,
             mounted_at: self.clock.now(),
             status: TaskSkillMountStatus::Active,
-            path: Self::mount_path(&task.meta.id, &mount_id),
+            path: Self::mount_skill_path(&skill_id),
         };
         mounts.push(mount.clone());
         self.mounts.save_for_task(&task.meta.id, &mounts)?;
@@ -598,7 +604,7 @@ mod tests {
         assert_eq!(summary.skill_id, "frontend-testing");
         assert_eq!(summary.version, "2026-05-22");
         assert_eq!(summary.status, "active");
-        assert!(summary.path.as_str().contains("mount-001"));
+        assert!(summary.path.as_str().contains("frontend-testing"));
     }
 
     #[test]

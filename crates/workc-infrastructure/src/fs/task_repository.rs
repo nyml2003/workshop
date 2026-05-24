@@ -71,6 +71,26 @@ impl FsTaskRepository {
             .map_err(io_error("create knowledge candidates dir"))?;
         fs::create_dir_all(self.project_root.join("skills"))
             .map_err(io_error("create skills dir"))?;
+        fs::create_dir_all(self.project_root.join(".opencode").join("skills"))
+            .map_err(io_error("create .opencode/skills dir"))?;
+
+        // .vscode/settings.json — hide dot-directories from explorer
+        let vscode_dir = self.project_root.join(".vscode");
+        fs::create_dir_all(&vscode_dir).map_err(io_error("create .vscode dir"))?;
+        write_if_missing(
+            vscode_dir.join("settings.json"),
+            r#"{
+  "files.exclude": {
+    ".opencode": true,
+    ".cursor": true,
+    ".agents": true,
+    ".claude": true,
+    ".codex": true
+  }
+}
+"#
+            .to_owned(),
+        )?;
 
         write_if_missing(
             self.project_root.join("materials").join("README.md"),
@@ -357,6 +377,9 @@ mod tests {
                 .join("README.md")
                 .exists()
         );
+        assert!(project_root.join("skills").join("README.md").exists());
+        assert!(project_root.join(".opencode").join("skills").exists());
+        assert!(project_root.join(".vscode").join("settings.json").exists());
         assert!(project_root.join("skills").join("README.md").exists());
 
         let loaded = repo
