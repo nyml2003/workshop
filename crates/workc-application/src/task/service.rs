@@ -43,10 +43,8 @@ impl DefaultTaskApplicationService {
         }
     }
 
-    fn task_root_path(&self, task: &TaskWorkspace) -> Utf8PathBuf {
-        self.workspace_root
-            .join("tasks")
-            .join(task.meta.id.as_str())
+    fn task_root_path(&self, _task: &TaskWorkspace) -> Utf8PathBuf {
+        self.workspace_root.clone()
     }
 
     fn load_task(&self, task_ref: &TaskRef) -> Result<TaskWorkspace, ApplicationError> {
