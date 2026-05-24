@@ -209,6 +209,7 @@ fn from_domain_status(value: TaskStatus) -> ApplicationTaskStatus {
 mod tests {
     use std::cell::RefCell;
     use std::collections::BTreeMap;
+    use std::rc::Rc;
 
     use camino::{Utf8Path, Utf8PathBuf};
     use time::OffsetDateTime;
@@ -589,5 +590,48 @@ mod tests {
 
         let result = service.load_task(&TaskRef::Id("task-missing".to_owned()));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn open_task_launches_editor_at_workspace_root() {
+        let repo = InMemoryTaskRepository::default();
+        repo.save(&sample_task(
+            "task-20260524-auth-session-fix",
+            "auth-session-fix",
+            "Fix session renewal",
+            None,
+        ))
+        .unwrap();
+        let launcher = Rc::new(RefCell::new(Vec::new()));
+        let calls = launcher.clone();
+
+        struct Capture(Rc<RefCell<Vec<(Utf8PathBuf, String)>>>);
+        impl EditorLauncher for Capture {
+            fn open_dir(&self, path: &Utf8Path, editor: EditorKind) -> Result<(), EditorError> {
+                let name = match editor {
+                    EditorKind::Cursor => "cursor",
+                    EditorKind::VsCode => "vscode",
+                    EditorKind::Other(_) => "other",
+                };
+                self.0.borrow_mut().push((path.to_path_buf(), name.to_owned()));
+                Ok(())
+            }
+        }
+
+        let svc = DefaultTaskApplicationService::new(
+            Utf8PathBuf::from("/workspace"),
+            Box::new(repo),
+            Box::new(FixedClock { now: OffsetDateTime::UNIX_EPOCH }),
+            Box::new(FixedTaskIdGenerator { next: TaskId::from("task-20260524-auth-session-fix") }),
+            Box::new(Capture(calls)),
+        );
+
+        svc.open_task(OpenTaskCommand {
+            task: TaskRef::Slug("auth-session-fix".to_owned()),
+            editor: Some(EditorKind::Cursor),
+        })
+        .unwrap();
+
+        assert_eq!(launcher.borrow()[0].0.as_str(), "/workspace");
     }
 }
