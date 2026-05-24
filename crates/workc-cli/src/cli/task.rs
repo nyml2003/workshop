@@ -10,10 +10,12 @@ use workc_application::task::{
 };
 use workc_application::task_skills::{MountSkillCommand, TaskSkillsApplicationService};
 use workc_domain::workspace::{WorkspaceEntry, WorkspaceRegistryRepository, WorkspaceStatus};
-#[cfg(target_os = "macos")]
-use workc_infrastructure::editor::macos::MacOsEditorLauncher;
 #[cfg(target_os = "windows")]
 use workc_infrastructure::editor::windows::WindowsEditorLauncher;
+#[cfg(target_os = "macos")]
+use workc_infrastructure::editor::macos::MacOsEditorLauncher;
+#[cfg(target_os = "linux")]
+use workc_infrastructure::editor::linux::LinuxEditorLauncher;
 use workc_infrastructure::fs::task_repository::{DefaultTaskIdGenerator, FsTaskRepository};
 use workc_infrastructure::fs::{
     FsSkillRegistryRepository, FsTaskSkillMountRepository, FsWorkspaceRegistryRepository,
@@ -205,6 +207,11 @@ fn default_editor_launcher() -> WindowsEditorLauncher {
 #[cfg(target_os = "macos")]
 fn default_editor_launcher() -> MacOsEditorLauncher {
     MacOsEditorLauncher
+}
+
+#[cfg(target_os = "linux")]
+fn default_editor_launcher() -> LinuxEditorLauncher {
+    LinuxEditorLauncher
 }
 
 fn parse_task_ref(value: &str) -> TaskRef {

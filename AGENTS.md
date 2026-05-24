@@ -103,28 +103,52 @@ git push origin v0.1.0
 
 ## 开发者
 
+### 日常流程
+
+```powershell
+# 改代码后，快速检查编译
+cargo check --workspace
+
+# 格式 + lint
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+
+# 单测
+cargo test
+
+# 冒烟测试（自动构建 release）
+cargo make smoke
+```
+
+### 提交前
+
+```powershell
+cargo make ci            # fmt → lint → smoke 一键通过后再 commit
+```
+
+### 发布
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0   # 触发 GitHub Actions，构建 4 平台 release
+```
+
 ### 构建 & 运行
 
 ```powershell
 cargo build --release -p workc-cli        # 产物：target/release/workc-cli.exe
 cargo run -p workc-cli -- <args>          # Debug 运行
-cargo check --workspace                    # 快速编译检查
-cargo fmt --all -- --check                # 格式检查
-cargo clippy --all-targets -- -D warnings # Lint
 ```
 
 ### 测试
 
-- 应用层 11 个单测 + 基础设施层 5 个单测，全部通过。
-- **冒烟测试** 使用 `cargo make`（需 `cargo install cargo-make`）和 Python 3。
-  - `cargo make smoke` — 完整 CLI + infra 冒烟测试（自动构建 release）
-  - `cargo make smoke-cli` — 仅 CLI 命令
-  - `cargo make smoke-infra` — 仅文件系统/TOML 校验
-  - `python scripts/smoke_test.py` — 直接运行（跳过构建；macOS/Linux 用 `python3`）
-- 冒烟测试创建临时 workspace，对所有 CLI 命令执行校验（退出码、输出内容、磁盘产物），最后清理。当前 45 项全部通过。
+- 单测：`cargo test`（16 个）
+- 冒烟测试：`cargo make smoke` / `cargo make smoke-cli` / `cargo make smoke-infra`
+- 直接跑冒烟（跳过构建）：`python scripts/smoke_test.py`
+- 当前冒烟 45 项全部通过
 
 ### Windows 注意事项
 
-- Shell：PowerShell 7+（`pwsh`），不要用 `powershell.exe`。
-- Makefile.toml 路径用 camelCase；`cargo make` 参数中的反斜杠可能需要转义。
-- `WindowsEditorLauncher` 使用 `cmd /c start`——如果编辑器已安装，`open` 会弹出新窗口。
+- Shell：PowerShell 7+（`pwsh`）
+- Makefile.toml 路径用 camelCase；`cargo make` 参数中的反斜杠可能需要转义
+- `WindowsEditorLauncher` 使用 `cmd /c start`——`open` 会弹出新窗口

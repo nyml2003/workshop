@@ -76,3 +76,13 @@ command = "python3"
 [tasks.ci]
 description = "CI pipeline: format check -> lint -> smoke"
 dependencies = ["fmt", "lint", "smoke"]
+
+[tasks.cross-check]
+description = "Cross-compile check for all release targets"
+script = [
+'''
+cargo check --target x86_64-apple-darwin
+cargo check --target x86_64-unknown-linux-gnu
+cargo check --target x86_64-pc-windows-msvc
+'''
+]
