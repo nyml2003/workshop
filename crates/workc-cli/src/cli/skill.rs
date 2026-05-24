@@ -168,14 +168,16 @@ pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
                 version: args.version,
             })?;
 
-            // Copy skill files from global cache to mount directory
+            // Copy skill files from global cache to all dot-directories
             let reg = FsSkillRegistryRepository::new();
             let version = summary.version.as_str();
             let cache_dir = reg.cache_dir(&args.skill_id, version);
-            let mount_dir = workspace_root.join(&summary.path);
             if cache_dir.exists() {
-                fs::create_dir_all(&mount_dir)?;
-                copy_skill_files(&cache_dir, &mount_dir)?;
+                for dir in &[".opencode", ".cursor", ".agents", ".claude", ".codex"] {
+                    let mount_dir = workspace_root.join(dir).join("skills").join(&args.skill_id);
+                    fs::create_dir_all(&mount_dir)?;
+                    copy_skill_files(&cache_dir, &mount_dir)?;
+                }
             }
 
             Ok(presenter.render_skill_mount(&summary))
