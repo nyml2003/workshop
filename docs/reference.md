@@ -8,12 +8,12 @@
 
 | 命令 | 子命令 | 说明 |
 |---|---|---|
-| `list` | — | 列出任务，支持 `--status` / `--tag` / `--limit` 过滤 |
+| `list` | — | 列出任务，支持 `--status` / `--tag` / `--limit` 过滤，`--json` |
 | `open <TASK>` | — | 在编辑器中打开任务，需 `--editor cursor\|vscode` |
 | `task` | `create` / `close` / `repos` | 任务管理 |
 | `repo` | `add` / `list` | 仓库目录 |
 | `repo-group` | `add` / `list` | 仓库分组 |
-| `skill` | `import` / `show` / `versions` / `mount` / `mounts` / `unmount` | 技能管理 |
+| `skill` | `import` / `show` / `versions` / `mount` / `mounts` / `unmount` / `check-updates` | 技能管理 |
 | `knowledge` | `candidate` / `list` / `show` / `update-meta` / `delete` / `promote` | 知识管理 |
 
 ### task 命令组
@@ -32,7 +32,7 @@ task repos clone   <TASK> [--repo <REPO>]... [--missing] [--dry-run]
 task repos status  <TASK> [--repo <REPO>]... [--clone-state missing|ready|dirty|unknown] [--dry-run]
 ```
 
-注意：`--skills` 在服务层已不再被拦截，但 CLI 会在任务创建后自动尝试挂载指定技能——若技能未预先通过 `skill import` 导入，mount 将失败并报 "skill not found"。
+`task create --skills` 会在任务创建后自动挂载指定技能；若技能未预先通过 `skill import` 导入，mount 报 "skill not found"。
 
 ### skill 命令组
 
@@ -43,9 +43,10 @@ skill versions <SKILL_ID>
 skill mount    <TASK> <SKILL_ID> [VERSION]
 skill mounts   <TASK>
 skill unmount  <TASK> <MOUNT_ID>
+skill check-updates <TASK> [--mount-id <ID>]
 ```
 
-注意：`mounts` 的 `<TASK>` 参数当前要求传入 task ID（以 `task-` 开头的完整 ID）。
+`--skill-id` 缺省时自动从 `--name` 派生。`mounts` 的 `<TASK>` 参数要求传入 task ID（以 `task-` 开头的完整 ID）。`mount` 要求技能已有版本（`import` 时传 `--version`），否则报 "skill version is required"。
 
 ### knowledge 命令组
 
@@ -114,42 +115,37 @@ workc 将所有数据存储在 workspace 根目录下，格式为 TOML。
 | `tasks/<task-id>/knowledge-candidates/<candidate-id>/meta.toml` | 候选知识条目：含 ID、标题、分类、标签、时间戳、状态 (candidate) |
 | `knowledge/<knowledge-id>/meta.toml` | 全局知识条目：与候选结构相同，状态为 published |
 
-## 已支持与当前限制
-
-### 已支持
+## 已支持
 
 - 任务的创建、按状态/标签过滤列表、打开（在编辑器中）和关闭
 - 仓库目录的注册和列表
 - 仓库分组的创建和列表
 - 任务的仓库关联、克隆和状态检查（依赖 git 可用）
 - 技能的导入、查看和版本列表
-- 技能的挂载、卸载、更新和版本更新检查
+- 技能的挂载、卸载和版本更新检查
 - 知识候选的 CRUD（作用域：任务）
 - 知识条目的 CRUD（作用域：全局）
 - 候选到全局知识的提升
-- 文本输出渲染
+- 文本与 JSON 双格式输出
 
-### 当前限制
+## 已知限制
 
-| 限制 | 影响 | 代码出处 |
-|---|---|---|
-| `task create --skills` 创建后自动 mount | 若技能未预先导入，mount 报 "skill not found" | `cli/src/cli/task.rs:231-247` |
-| `open` 必须显式传 `--editor` | 不支持编辑器自动发现 | `application/src/task/service.rs:143-146` |
-| skill runtime 为 placeholder | `prepare` / `use` / `check_prepare_status` 返回 `AdapterUnavailable` | `infrastructure/src/runtime/macos.rs:3`、`windows.rs:3` |
-| `skill override` 未实现 | 调用即返回 `AdapterUnavailable` | `application/src/task_skills/service.rs:146` |
-| JSON presenter 不在 V1 范围 | 无 JSON 输出能力 | `cli/src/presenters/json.rs:1` |
-| `git ahead/behind` 未计算 | `repo status` 中的 ahead/behind 恒为 0 | `infrastructure/src/git/command_git_client.rs` |
-| `skill mounts` 要求 task ID 格式 | 必须传 `task-*` 格式的 ID | CLI help 说明 |
+| 限制 | 影响 |
+|---|---|
+| `open` 必须显式传 `--editor` | 不支持编辑器自动发现 |
+| `task repos clone` | 需要 `git` 在 PATH 且仓库可达 |
+| `skill mount` 需版本 | 技能导入时须传 `--version` |
+| `skill mounts` | `<TASK>` 必须传 `task-*` 格式的完整 ID |
 
 ## 术语约定
 
 | 术语 | 含义 |
 |---|---|
 | workc | 产品名 |
-| workc-cli | 当前可运行的二进制 / Cargo package 名 |
+| workc-cli | 可运行的二进制 / Cargo package 名 |
 | 任务 (task) | 一次开发工作的上下文容器 |
 | 仓库目录 (repo catalog) | 全局可用的仓库注册表 |
 | 仓库分组 (repo group) | 多个仓库的逻辑组合 |
-| 技能 (skill) | 可复用的工具或工作流，含 prepare / use 步骤 |
+| 技能 (skill) | 可复用的工具或工作流 |
 | 知识候选 (knowledge candidate) | 在任务内产生的知识草稿 |
 | 知识条目 (knowledge entry) | 提升后的全局知识 |
