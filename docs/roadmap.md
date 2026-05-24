@@ -16,7 +16,7 @@
 | 四层架构骨架 | 领域层、应用层（含 ports）、基础设施层（FS 仓储、git adapter、editor adapter、system clock）、CLI 层 |
 | 跨平台 editor 启动 | macOS（Cursor/VS Code）和 Windows（Cursor/VS Code） |
 | 文本和 JSON 输出 | 所有命令都有对应的文本和 JSON 渲染函数 |
-| 测试覆盖 | 11 个应用层测试 + 5 个基础设施层测试 + 47 项冒烟测试 |
+| 测试覆盖 | 16 个单测 + 45 项冒烟测试 |
 
 ## 后续候选
 

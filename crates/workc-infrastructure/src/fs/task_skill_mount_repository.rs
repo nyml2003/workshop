@@ -8,7 +8,7 @@ use workc_domain::shared::{MountId, SkillId, SkillSourceId, SkillVersion, TaskId
 use workc_domain::task::{TaskSkillMount, TaskSkillMountRepository, TaskSkillMountStatus};
 
 pub struct FsTaskSkillMountRepository {
-    workspace_root: Utf8PathBuf,
+    project_root: Utf8PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -29,17 +29,12 @@ struct MountToml {
 }
 
 impl FsTaskSkillMountRepository {
-    pub fn new(workspace_root: Utf8PathBuf) -> Self {
-        Self { workspace_root }
+    pub fn new(project_root: Utf8PathBuf) -> Self {
+        Self { project_root }
     }
 
-    fn mounts_path(&self, task_id: &TaskId) -> Utf8PathBuf {
-        self.workspace_root
-            .join("tasks")
-            .join(task_id.as_str())
-            .join(".codex")
-            .join("skills")
-            .join("mounts.toml")
+    fn mounts_path(&self, _task_id: &TaskId) -> Utf8PathBuf {
+        self.project_root.join("skills").join("mounts.toml")
     }
 
     fn format_timestamp(value: Timestamp) -> Result<String, DomainError> {

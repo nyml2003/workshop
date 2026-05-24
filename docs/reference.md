@@ -2,7 +2,7 @@
 
 ## CLI 命令
 
-所有命令通过 `cargo run -p workc-cli -- <command>` 执行。
+所有命令通过 `workc <command>` 执行。
 
 ### 顶层命令
 
@@ -67,53 +67,53 @@ knowledge promote <TASK_ID> <CANDIDATE_ID> <KNOWLEDGE_ID> [--title <TITLE>] [--c
 
 ## 持久化布局
 
-workc 将所有数据存储在 workspace 根目录下，格式为 TOML。
+workc 的数据分为两层：全局数据存放在 `~/.workc/`，workspace 数据存放在项目目录。
 
 ```
-<workspace_root>/
-├── tasks/
-│   └── <task-id>/                          # 每个任务一个目录
-│       ├── task.toml                        # 任务元信息与活动记录
-│       ├── repos/                           # 克隆后的仓库
-│       ├── materials/                       # 任务资料
-│       └── knowledge-candidates/
-│           └── <candidate-id>/
-│               ├── meta.toml                # 候选元信息
-│               └── sources/
-│                   └── source-NNN.toml      # 候选引用来源
-│       └── .codex/
-│           └── skills/
-│               ├── mounts.toml              # 任务技能挂载列表
-│               └── mounted/<mount-id>/      # 挂载的技能文件
-│
+~/.workc/
+├── bin/workc                         # 二进制
+├── config.toml                        # [knowledge] remote
+├── workspaces.toml                    # [[workspaces]] 注册表
 ├── repos/
-│   ├── catalog.toml                         # [[repos]] 仓库注册表
-│   └── groups.toml                          # [[groups]] 仓库分组
-│
+│   ├── catalog.toml                   # [[repos]] 仓库注册表
+│   └── groups.toml                    # [[groups]] 仓库分组
 ├── skills/
-│   └── registry/
-│       ├── sources.toml                     # [[sources]] 技能来源
-│       └── skills.toml                      # [[skills]] 技能定义
-│
-└── knowledge/
+│   ├── registry/
+│   │   ├── sources.toml               # [[sources]] 技能来源
+│   │   └── skills.toml                # [[skills]] 技能定义
+│   └── cache/<id>/<ver>/              # 技能文件缓存
+└── knowledge/                         # git clone，已发布知识
     └── <knowledge-id>/
-        ├── meta.toml                        # 全局知识条目
+        ├── meta.toml
         └── sources/
-            └── source-NNN.toml              # 知识引用来源
+
+<项目>/                                # workspace = 一个 task
+├── .workc.toml                        # task 元数据
+├── repos/                             # 克隆的仓库
+├── knowledge-candidates/
+│   └── <candidate-id>/
+│       ├── meta.toml
+│       └── sources/
+└── skills/
+    └── mounts.toml                    # [{skill_id, version}] 挂载引用
 ```
 
 ### 各文件用途
 
 | 路径 | 用途 |
 |---|---|
-| `tasks/<task-id>/task.toml` | 任务的核心信息：ID、slug、标题、模板、状态、时间戳、标签、关联仓库和分组、目录路径 |
-| `repos/catalog.toml` | 全局仓库注册表：每条记录含 ID、URL、标签、描述 |
-| `repos/groups.toml` | 仓库分组：每条记录含组 ID、成员仓库 ID 列表、标签、描述 |
-| `skills/registry/sources.toml` | 技能来源：每条记录含来源 ID、类型 (git/local/archive)、位置、版本引用、导入时间 |
-| `skills/registry/skills.toml` | 技能定义：每条记录含技能 ID、所属来源、可用版本列表、最新版本 |
-| `tasks/<task-id>/.codex/skills/mounts.toml` | 任务技能挂载：每条记录含挂载 ID、技能 ID、版本、挂载时间、状态、路径 |
-| `tasks/<task-id>/knowledge-candidates/<candidate-id>/meta.toml` | 候选知识条目：含 ID、标题、分类、标签、时间戳、状态 (candidate) |
-| `knowledge/<knowledge-id>/meta.toml` | 全局知识条目：与候选结构相同，状态为 published |
+| `~/.workc/config.toml` | 全局配置：knowledge git remote |
+| `~/.workc/workspaces.toml` | workspace 注册表：每条记录含 slug、路径、标题、状态、最后活动时间 |
+| `~/.workc/repos/catalog.toml` | 全局仓库注册表：每条记录含 ID、URL、标签、描述 |
+| `~/.workc/repos/groups.toml` | 仓库分组：每条记录含组 ID、成员仓库 ID 列表、标签、描述 |
+| `~/.workc/skills/registry/sources.toml` | 技能来源：每条记录含来源 ID、类型 (git/local/archive)、位置、版本引用、导入时间 |
+| `~/.workc/skills/registry/skills.toml` | 技能定义：每条记录含技能 ID、所属来源、可用版本列表、最新版本 |
+| `~/.workc/skills/cache/<id>/<ver>/` | 技能文件缓存：import 时下载/复制的实际文件 |
+| `~/.workc/knowledge/` | 已发布知识：git clone，由 `knowledge promote` 生产，手动 git 操作 |
+| `<项目>/.workc.toml` | task 元数据：ID、slug、标题、模板、状态、时间戳、标签、关联仓库和分组 |
+| `<项目>/repos/` | 克隆的仓库：物理目录 |
+| `<项目>/knowledge-candidates/<cid>/meta.toml` | 候选知识条目：含 ID、标题、分类、标签、时间戳 |
+| `<项目>/skills/mounts.toml` | 任务技能挂载引用：每条记录含技能 ID、版本 |
 
 ## 已支持
 

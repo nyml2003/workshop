@@ -87,9 +87,8 @@ fn workspace_root() -> Result<Utf8PathBuf> {
 }
 
 fn registry_service() -> Result<DefaultSkillRegistryApplicationService> {
-    let workspace_root = workspace_root()?;
     Ok(DefaultSkillRegistryApplicationService::new(
-        Box::new(FsSkillRegistryRepository::new(workspace_root)),
+        Box::new(FsSkillRegistryRepository::new()),
         Box::new(SystemClock),
     ))
 }
@@ -99,7 +98,7 @@ fn task_skill_service() -> Result<DefaultTaskSkillsApplicationService> {
     Ok(DefaultTaskSkillsApplicationService::new(
         Box::new(FsTaskRepository::new(workspace_root.clone())),
         Box::new(FsTaskSkillMountRepository::new(workspace_root.clone())),
-        Box::new(FsSkillRegistryRepository::new(workspace_root)),
+        Box::new(FsSkillRegistryRepository::new()),
         Box::new(SystemClock),
         None,
     ))

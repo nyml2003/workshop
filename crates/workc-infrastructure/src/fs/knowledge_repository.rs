@@ -9,8 +9,10 @@ use workc_domain::knowledge::{
 };
 use workc_domain::shared::{KnowledgeCandidateId, KnowledgeId, TaskId, Timestamp};
 
+use super::paths;
+
 pub struct FsKnowledgeRepository {
-    workspace_root: Utf8PathBuf,
+    project_root: Utf8PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,19 +40,16 @@ struct SourceToml {
 }
 
 impl FsKnowledgeRepository {
-    pub fn new(workspace_root: Utf8PathBuf) -> Self {
-        Self { workspace_root }
+    pub fn new(project_root: Utf8PathBuf) -> Self {
+        Self { project_root }
     }
 
-    fn knowledge_root(&self) -> Utf8PathBuf {
-        self.workspace_root.join("knowledge")
+    fn knowledge_root() -> Utf8PathBuf {
+        paths::workc_knowledge_root()
     }
 
-    fn candidates_root(&self, task_id: &TaskId) -> Utf8PathBuf {
-        self.workspace_root
-            .join("tasks")
-            .join(task_id.as_str())
-            .join("knowledge-candidates")
+    fn candidates_root(&self, _task_id: &TaskId) -> Utf8PathBuf {
+        self.project_root.join("knowledge-candidates")
     }
 
     fn candidate_dir(&self, task_id: &TaskId, candidate_id: &KnowledgeCandidateId) -> Utf8PathBuf {
@@ -58,7 +57,7 @@ impl FsKnowledgeRepository {
     }
 
     fn knowledge_dir(&self, knowledge_id: &KnowledgeId) -> Utf8PathBuf {
-        self.knowledge_root().join(knowledge_id.as_str())
+        Self::knowledge_root().join(knowledge_id.as_str())
     }
 
     fn meta_path(dir: &Utf8PathBuf) -> Utf8PathBuf {
@@ -141,7 +140,7 @@ impl FsKnowledgeRepository {
 
 impl KnowledgeRepository for FsKnowledgeRepository {
     fn load(&self) -> Result<KnowledgeBase, DomainError> {
-        let root = self.knowledge_root();
+        let root = Self::knowledge_root();
         if !root.exists() {
             return Ok(KnowledgeBase::default());
         }
@@ -179,7 +178,7 @@ impl KnowledgeRepository for FsKnowledgeRepository {
     }
 
     fn save(&self, knowledge_base: &KnowledgeBase) -> Result<(), DomainError> {
-        fs::create_dir_all(self.knowledge_root()).map_err(io_error("create knowledge root"))?;
+        fs::create_dir_all(Self::knowledge_root()).map_err(io_error("create knowledge root"))?;
         for entry in &knowledge_base.entries {
             self.create_entry(entry)?;
         }

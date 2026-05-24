@@ -9,9 +9,9 @@ use workc_domain::skill_registry::{
     SkillDefinition, SkillRegistry, SkillRegistryRepository, SkillSource, SkillSourceKind,
 };
 
-pub struct FsSkillRegistryRepository {
-    workspace_root: Utf8PathBuf,
-}
+use super::paths;
+
+pub struct FsSkillRegistryRepository;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct SourcesToml {
@@ -44,20 +44,28 @@ struct SkillToml {
 }
 
 impl FsSkillRegistryRepository {
-    pub fn new(workspace_root: Utf8PathBuf) -> Self {
-        Self { workspace_root }
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for FsSkillRegistryRepository {
+    fn default() -> Self {
+        Self
+    }
+}
+
+impl FsSkillRegistryRepository {
+    fn registry_root() -> Utf8PathBuf {
+        paths::workc_skills_registry_root()
     }
 
-    fn registry_root(&self) -> Utf8PathBuf {
-        self.workspace_root.join("skills").join("registry")
+    fn sources_path() -> Utf8PathBuf {
+        Self::registry_root().join("sources.toml")
     }
 
-    fn sources_path(&self) -> Utf8PathBuf {
-        self.registry_root().join("sources.toml")
-    }
-
-    fn skills_path(&self) -> Utf8PathBuf {
-        self.registry_root().join("skills.toml")
+    fn skills_path() -> Utf8PathBuf {
+        Self::registry_root().join("skills.toml")
     }
 
     fn format_timestamp(value: Option<Timestamp>) -> Result<Option<String>, DomainError> {
@@ -105,14 +113,14 @@ impl FsSkillRegistryRepository {
 
 impl SkillRegistryRepository for FsSkillRegistryRepository {
     fn load(&self) -> Result<SkillRegistry, DomainError> {
-        let root = self.registry_root();
+        let root = Self::registry_root();
         if !root.exists() {
             return Ok(SkillRegistry::default());
         }
 
-        let sources = if self.sources_path().exists() {
+        let sources = if Self::sources_path().exists() {
             let raw =
-                fs::read_to_string(self.sources_path()).map_err(io_error("read skill sources"))?;
+                fs::read_to_string(Self::sources_path()).map_err(io_error("read skill sources"))?;
             toml::from_str::<SourcesToml>(&raw)
                 .map_err(invalid_toml("sources.toml"))?
                 .sources
@@ -131,9 +139,9 @@ impl SkillRegistryRepository for FsSkillRegistryRepository {
             Vec::new()
         };
 
-        let skills = if self.skills_path().exists() {
+        let skills = if Self::skills_path().exists() {
             let raw =
-                fs::read_to_string(self.skills_path()).map_err(io_error("read skills index"))?;
+                fs::read_to_string(Self::skills_path()).map_err(io_error("read skills index"))?;
             toml::from_str::<SkillsToml>(&raw)
                 .map_err(invalid_toml("skills.toml"))?
                 .skills
@@ -153,7 +161,8 @@ impl SkillRegistryRepository for FsSkillRegistryRepository {
     }
 
     fn save(&self, registry: &SkillRegistry) -> Result<(), DomainError> {
-        fs::create_dir_all(self.registry_root()).map_err(io_error("create skill registry root"))?;
+        fs::create_dir_all(Self::registry_root())
+            .map_err(io_error("create skill registry root"))?;
 
         let sources = SourcesToml {
             sources: registry
@@ -184,12 +193,12 @@ impl SkillRegistryRepository for FsSkillRegistryRepository {
         };
 
         fs::write(
-            self.sources_path(),
+            Self::sources_path(),
             toml::to_string_pretty(&sources).map_err(invalid_serialize("sources.toml"))?,
         )
         .map_err(io_error("write skill sources"))?;
         fs::write(
-            self.skills_path(),
+            Self::skills_path(),
             toml::to_string_pretty(&skills).map_err(invalid_serialize("skills.toml"))?,
         )
         .map_err(io_error("write skills index"))?;

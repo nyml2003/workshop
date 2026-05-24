@@ -3,18 +3,21 @@ use super::skill::SkillCommand;
 use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use workc_application::ports::EditorKind;
+use workc_application::ports::{Clock, EditorKind};
 use workc_application::task::{
     ApplicationTaskStatus, CloseTaskCommand, CreateTaskCommand, DefaultTaskApplicationService,
-    ListTasksQuery, OpenTaskCommand, TaskApplicationService, TaskRef,
+    ListTasksQuery, OpenTaskCommand, TaskApplicationService, TaskRef, TaskSlug,
 };
 use workc_application::task_skills::{MountSkillCommand, TaskSkillsApplicationService};
+use workc_domain::workspace::{WorkspaceEntry, WorkspaceRegistryRepository, WorkspaceStatus};
 #[cfg(target_os = "macos")]
 use workc_infrastructure::editor::macos::MacOsEditorLauncher;
 #[cfg(target_os = "windows")]
 use workc_infrastructure::editor::windows::WindowsEditorLauncher;
 use workc_infrastructure::fs::task_repository::{DefaultTaskIdGenerator, FsTaskRepository};
-use workc_infrastructure::fs::{FsSkillRegistryRepository, FsTaskSkillMountRepository};
+use workc_infrastructure::fs::{
+    FsSkillRegistryRepository, FsTaskSkillMountRepository, FsWorkspaceRegistryRepository,
+};
 use workc_infrastructure::time::system_clock::SystemClock;
 
 use super::repo::{RepoCommand, RepoGroupCommand, TaskReposCommand};
@@ -143,6 +146,57 @@ fn task_service() -> Result<DefaultTaskApplicationService> {
     ))
 }
 
+fn task_service_for_root(root: Utf8PathBuf) -> Result<DefaultTaskApplicationService> {
+    Ok(DefaultTaskApplicationService::new(
+        root.clone(),
+        Box::new(FsTaskRepository::new(root)),
+        Box::new(SystemClock),
+        Box::new(DefaultTaskIdGenerator),
+        Box::new(default_editor_launcher()),
+    ))
+}
+
+fn workspace_registry() -> FsWorkspaceRegistryRepository {
+    FsWorkspaceRegistryRepository::new()
+}
+
+fn register_workspace(slug: &str, title: &str, status: WorkspaceStatus) -> Result<()> {
+    let cwd = workspace_root()?;
+    let registry = workspace_registry();
+    let mut entries = registry.load()?;
+    let now = SystemClock.now();
+
+    if let Some(existing) = entries.iter_mut().find(|e| e.path == cwd) {
+        existing.slug = TaskSlug::from(slug);
+        existing.title = title.to_owned();
+        existing.status = status;
+        existing.last_activity_at = Some(now);
+    } else {
+        entries.push(WorkspaceEntry {
+            slug: TaskSlug::from(slug),
+            path: cwd,
+            title: title.to_owned(),
+            status,
+            last_activity_at: Some(now),
+        });
+    }
+
+    registry.save(&entries)?;
+    Ok(())
+}
+
+fn update_workspace_status(status: WorkspaceStatus) -> Result<()> {
+    let cwd = workspace_root()?;
+    let registry = workspace_registry();
+    let mut entries = registry.load()?;
+    if let Some(entry) = entries.iter_mut().find(|e| e.path == cwd) {
+        entry.status = status;
+        entry.last_activity_at = Some(SystemClock.now());
+        registry.save(&entries)?;
+    }
+    Ok(())
+}
+
 #[cfg(target_os = "windows")]
 fn default_editor_launcher() -> WindowsEditorLauncher {
     WindowsEditorLauncher
@@ -197,7 +251,16 @@ pub fn run() -> Result<String> {
         }
         Command::Open(command) => {
             let editor = command.editor.clone().map(to_editor_kind);
-            service.open_task(OpenTaskCommand {
+            let registry = workspace_registry();
+            let entries = registry.load()?;
+            let workspace_service = entries
+                .iter()
+                .find(|e| e.slug.as_str() == command.task)
+                .map(|e| task_service_for_root(e.path.clone()))
+                .transpose()?
+                .unwrap_or(service);
+
+            workspace_service.open_task(OpenTaskCommand {
                 task: parse_task_ref(&command.task),
                 editor,
             })?;
@@ -234,7 +297,7 @@ pub fn run() -> Result<String> {
                         workc_application::task_skills::DefaultTaskSkillsApplicationService::new(
                             Box::new(FsTaskRepository::new(workspace_root.clone())),
                             Box::new(FsTaskSkillMountRepository::new(workspace_root.clone())),
-                            Box::new(FsSkillRegistryRepository::new(workspace_root)),
+                            Box::new(FsSkillRegistryRepository::new()),
                             Box::new(SystemClock),
                             None,
                         );
@@ -247,12 +310,15 @@ pub fn run() -> Result<String> {
                     }
                 }
 
+                register_workspace(&result.slug, &result.title, WorkspaceStatus::Active)?;
+
                 Ok(presenter.render_task_created(&result))
             }
             TaskSubcommand::Close(command) => {
                 service.close_task(CloseTaskCommand {
                     task_id: command.task_id,
                 })?;
+                update_workspace_status(WorkspaceStatus::Closed)?;
                 Ok(presenter.render_message("Closed task"))
             }
             TaskSubcommand::Repos { command } => {

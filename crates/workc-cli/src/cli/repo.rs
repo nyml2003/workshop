@@ -114,9 +114,8 @@ fn workspace_root() -> Result<Utf8PathBuf> {
 }
 
 fn repo_catalog_service() -> Result<DefaultRepoCatalogApplicationService> {
-    let workspace_root = workspace_root()?;
     Ok(DefaultRepoCatalogApplicationService::new(Box::new(
-        FsRepoCatalogRepository::new(workspace_root),
+        FsRepoCatalogRepository::new(),
     )))
 }
 
@@ -124,7 +123,7 @@ fn task_repos_service() -> Result<DefaultTaskReposApplicationService> {
     let workspace_root = workspace_root()?;
     Ok(DefaultTaskReposApplicationService::new(
         Box::new(FsTaskRepository::new(workspace_root.clone())),
-        Box::new(FsRepoCatalogRepository::new(workspace_root)),
+        Box::new(FsRepoCatalogRepository::new()),
         Box::new(SystemClock),
         Box::new(CommandGitClient),
     ))

@@ -10,7 +10,7 @@ use workc_domain::shared::{RepoGroupId, RepoId, TaskId, TaskSlug, Timestamp};
 use workc_domain::task::{TaskIdGenerator, TaskRepository, TaskWorkspace};
 
 pub struct FsTaskRepository {
-    workspace_root: Utf8PathBuf,
+    project_root: Utf8PathBuf,
 }
 
 pub struct DefaultTaskIdGenerator;
@@ -54,42 +54,36 @@ enum TimestampValue {
 }
 
 impl FsTaskRepository {
-    pub fn new(workspace_root: Utf8PathBuf) -> Self {
-        Self { workspace_root }
+    pub fn new(project_root: Utf8PathBuf) -> Self {
+        Self { project_root }
     }
 
-    fn tasks_root(&self) -> Utf8PathBuf {
-        self.workspace_root.join("tasks")
+    fn task_toml_path(&self) -> Utf8PathBuf {
+        self.project_root.join(".workc.toml")
     }
 
-    fn task_root(&self, task_id: &TaskId) -> Utf8PathBuf {
-        self.tasks_root().join(task_id.as_str())
-    }
-
-    fn task_toml_path(&self, task_id: &TaskId) -> Utf8PathBuf {
-        self.task_root(task_id).join("task.toml")
-    }
-
-    fn write_default_files(&self, task: &TaskWorkspace) -> Result<(), DomainError> {
-        let task_root = self.task_root(&task.meta.id);
-        fs::create_dir_all(task_root.join("repos")).map_err(io_error("create repos dir"))?;
-        fs::create_dir_all(task_root.join("materials"))
+    fn write_default_files(&self, _task: &TaskWorkspace) -> Result<(), DomainError> {
+        fs::create_dir_all(self.project_root.join("repos"))
+            .map_err(io_error("create repos dir"))?;
+        fs::create_dir_all(self.project_root.join("materials"))
             .map_err(io_error("create materials dir"))?;
-        fs::create_dir_all(task_root.join("knowledge-candidates"))
+        fs::create_dir_all(self.project_root.join("knowledge-candidates"))
             .map_err(io_error("create knowledge candidates dir"))?;
-        fs::create_dir_all(task_root.join(".codex").join("skills"))
-            .map_err(io_error("create task skills dir"))?;
+        fs::create_dir_all(self.project_root.join("skills"))
+            .map_err(io_error("create skills dir"))?;
 
         write_if_missing(
-            task_root.join("materials").join("README.md"),
+            self.project_root.join("materials").join("README.md"),
             "# Task Materials\n".to_owned(),
         )?;
         write_if_missing(
-            task_root.join("knowledge-candidates").join("README.md"),
+            self.project_root
+                .join("knowledge-candidates")
+                .join("README.md"),
             "# Knowledge Candidates\n".to_owned(),
         )?;
         write_if_missing(
-            task_root.join(".codex").join("skills").join("README.md"),
+            self.project_root.join("skills").join("README.md"),
             "# Task Skills\n".to_owned(),
         )?;
 
@@ -197,59 +191,37 @@ impl FsTaskRepository {
             },
         })
     }
-}
 
-impl TaskRepository for FsTaskRepository {
-    fn find_by_id(&self, id: &TaskId) -> Result<Option<TaskWorkspace>, DomainError> {
-        let path = self.task_toml_path(id);
+    fn read_task(&self) -> Result<Option<TaskWorkspace>, DomainError> {
+        let path = self.task_toml_path();
         if !path.exists() {
             return Ok(None);
         }
 
-        let raw = fs::read_to_string(&path).map_err(io_error("read task.toml"))?;
+        let raw = fs::read_to_string(&path).map_err(io_error("read .workc.toml"))?;
         let parsed =
             toml::from_str::<TaskToml>(&raw).map_err(|error| DomainError::InvalidInput {
-                field: "task.toml",
+                field: ".workc.toml",
                 reason: error.to_string(),
             })?;
         Ok(Some(Self::from_toml(parsed)?))
     }
+}
+
+impl TaskRepository for FsTaskRepository {
+    fn find_by_id(&self, id: &TaskId) -> Result<Option<TaskWorkspace>, DomainError> {
+        Ok(self.read_task()?.filter(|task| task.meta.id == *id))
+    }
 
     fn find_by_slug(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
-        Ok(self
-            .list()?
-            .into_iter()
-            .find(|task| task.meta.slug == *slug))
+        Ok(self.read_task()?.filter(|task| task.meta.slug == *slug))
     }
 
     fn list(&self) -> Result<Vec<TaskWorkspace>, DomainError> {
-        let tasks_root = self.tasks_root();
-        if !tasks_root.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut tasks = Vec::new();
-        for entry in fs::read_dir(&tasks_root).map_err(io_error("read tasks root"))? {
-            let entry = entry.map_err(io_error("iterate tasks root"))?;
-            let path = entry.path().join("task.toml");
-            if !path.exists() {
-                continue;
-            }
-            let raw = fs::read_to_string(&path).map_err(io_error("read task.toml"))?;
-            let parsed =
-                toml::from_str::<TaskToml>(&raw).map_err(|error| DomainError::InvalidInput {
-                    field: "task.toml",
-                    reason: error.to_string(),
-                })?;
-            tasks.push(Self::from_toml(parsed)?);
-        }
-
-        Ok(tasks)
+        Ok(self.read_task()?.into_iter().collect())
     }
 
     fn save(&self, task: &TaskWorkspace) -> Result<(), DomainError> {
-        let task_root = self.task_root(&task.meta.id);
-        fs::create_dir_all(&task_root).map_err(io_error("create task root"))?;
         self.write_default_files(task)?;
         let raw = toml::to_string_pretty(&Self::to_toml(task)?).map_err(|error| {
             DomainError::InvalidInput {
@@ -257,7 +229,7 @@ impl TaskRepository for FsTaskRepository {
                 reason: error.to_string(),
             }
         })?;
-        fs::write(self.task_toml_path(&task.meta.id), raw).map_err(io_error("write task.toml"))?;
+        fs::write(self.task_toml_path(), raw).map_err(io_error("write .workc.toml"))?;
         Ok(())
     }
 }
@@ -370,29 +342,22 @@ mod tests {
 
     #[test]
     fn save_creates_expected_layout_and_roundtrips() {
-        let workspace_root = temp_workspace();
-        let repo = FsTaskRepository::new(workspace_root.clone());
+        let project_root = temp_workspace();
+        let repo = FsTaskRepository::new(project_root.clone());
         let task = sample_task();
 
         repo.save(&task).unwrap();
 
-        let task_root = workspace_root.join("tasks").join(task.meta.id.as_str());
-        assert!(task_root.join("task.toml").exists());
-        assert!(task_root.join("repos").exists());
-        assert!(task_root.join("materials").join("README.md").exists());
+        assert!(project_root.join(".workc.toml").exists());
+        assert!(project_root.join("repos").exists());
+        assert!(project_root.join("materials").join("README.md").exists());
         assert!(
-            task_root
+            project_root
                 .join("knowledge-candidates")
                 .join("README.md")
                 .exists()
         );
-        assert!(
-            task_root
-                .join(".codex")
-                .join("skills")
-                .join("README.md")
-                .exists()
-        );
+        assert!(project_root.join("skills").join("README.md").exists());
 
         let loaded = repo
             .find_by_slug(&TaskSlug::from("auth-session-fix"))
@@ -401,19 +366,16 @@ mod tests {
         assert_eq!(loaded.meta.template, "default");
         assert_eq!(loaded.repos.repos.len(), 1);
 
-        fs::remove_dir_all(workspace_root).unwrap();
+        fs::remove_dir_all(project_root).unwrap();
     }
 
     #[test]
     fn load_accepts_legacy_array_timestamp_format() {
-        let workspace_root = temp_workspace();
-        let repo = FsTaskRepository::new(workspace_root.clone());
-        let task_root = workspace_root
-            .join("tasks")
-            .join("task-20260524-auth-session-fix");
-        fs::create_dir_all(&task_root).unwrap();
+        let project_root = temp_workspace();
+        fs::create_dir_all(&project_root).unwrap();
+        let repo = FsTaskRepository::new(project_root.clone());
         fs::write(
-            task_root.join("task.toml"),
+            project_root.join(".workc.toml"),
             r#"
 id = "task-20260524-auth-session-fix"
 slug = "auth-session-fix"
@@ -431,7 +393,7 @@ repos = []
 materials = "materials"
 repos = "repos"
 knowledge_candidates = "knowledge-candidates"
-task_skills = ".codex/skills"
+task_skills = "skills"
 "#,
         )
         .unwrap();
@@ -443,6 +405,6 @@ task_skills = ".codex/skills"
         assert_eq!(loaded.meta.template, "default");
         assert!(loaded.activity.last_activity_at.is_some());
 
-        fs::remove_dir_all(workspace_root).unwrap();
+        fs::remove_dir_all(project_root).unwrap();
     }
 }

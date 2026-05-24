@@ -424,6 +424,7 @@ dependencies = [
  "serde_json",
  "time",
  "workc-application",
+ "workc-domain",
  "workc-infrastructure",
 ]
 
