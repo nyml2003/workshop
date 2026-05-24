@@ -275,3 +275,473 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+    use std::collections::BTreeMap;
+
+    use camino::Utf8Path;
+    use time::OffsetDateTime;
+    use workc_domain::errors::DomainError;
+    use workc_domain::shared::{MountId, SkillId, SkillSourceId, SkillVersion, TaskId, TaskSlug};
+    use workc_domain::skill_registry::{
+        PrepareResult, PrepareStep, SkillDefinition, SkillExecutionStatus, SkillRegistry, SkillRegistryRepository,
+        SkillSource, UseResult, UseStep,
+    };
+    use workc_domain::task::{
+        TaskActivity, TaskMeta, TaskPaths, TaskRepoSelection, TaskRepository, TaskSkillMount,
+        TaskSkillMountRepository, TaskStatus, TaskWorkspace,
+    };
+
+    use crate::ports::{Clock, PrepareStatusRecord, RuntimeError, SkillRuntime};
+
+    use super::*;
+
+    #[derive(Default)]
+    struct InMemoryTaskRepository {
+        tasks: RefCell<BTreeMap<String, TaskWorkspace>>,
+    }
+
+    impl TaskRepository for InMemoryTaskRepository {
+        fn find_by_id(&self, id: &TaskId) -> Result<Option<TaskWorkspace>, DomainError> {
+            Ok(self.tasks.borrow().values().find(|t| t.meta.id == *id).cloned())
+        }
+
+        fn find_by_slug(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
+            Ok(self.tasks.borrow().values().find(|t| t.meta.slug == *slug).cloned())
+        }
+
+        fn list(&self) -> Result<Vec<TaskWorkspace>, DomainError> {
+            Ok(self.tasks.borrow().values().cloned().collect())
+        }
+
+        fn save(&self, task: &TaskWorkspace) -> Result<(), DomainError> {
+            self.tasks.borrow_mut().insert(task.meta.id.to_string(), task.clone());
+            Ok(())
+        }
+    }
+
+    #[derive(Default)]
+    struct InMemorySkillRegistryRepository {
+        registry: RefCell<SkillRegistry>,
+    }
+
+    impl SkillRegistryRepository for InMemorySkillRegistryRepository {
+        fn load(&self) -> Result<SkillRegistry, DomainError> {
+            Ok(self.registry.borrow().clone())
+        }
+
+        fn save(&self, registry: &SkillRegistry) -> Result<(), DomainError> {
+            *self.registry.borrow_mut() = registry.clone();
+            Ok(())
+        }
+
+        fn find_source(&self, id: &SkillSourceId) -> Result<Option<SkillSource>, DomainError> {
+            Ok(self.registry.borrow().sources.iter().find(|s| s.id == *id).cloned())
+        }
+
+        fn find_skill(&self, id: &SkillId) -> Result<Option<SkillDefinition>, DomainError> {
+            Ok(self.registry.borrow().skills.iter().find(|s| s.id == *id).cloned())
+        }
+    }
+
+    #[derive(Default)]
+    struct InMemoryTaskSkillMountRepository {
+        mounts: RefCell<BTreeMap<String, Vec<TaskSkillMount>>>,
+    }
+
+    impl TaskSkillMountRepository for InMemoryTaskSkillMountRepository {
+        fn list_for_task(&self, task_id: &TaskId) -> Result<Vec<TaskSkillMount>, DomainError> {
+            Ok(self.mounts.borrow().get(task_id.as_str()).cloned().unwrap_or_default())
+        }
+
+        fn save_for_task(&self, task_id: &TaskId, mounts: &[TaskSkillMount]) -> Result<(), DomainError> {
+            self.mounts.borrow_mut().insert(task_id.to_string(), mounts.to_vec());
+            Ok(())
+        }
+
+        fn remove_for_task(&self, task_id: &TaskId, mount_id: &MountId) -> Result<(), DomainError> {
+            if let Some(mounts) = self.mounts.borrow_mut().get_mut(task_id.as_str()) {
+                mounts.retain(|m| m.id != *mount_id);
+            }
+            Ok(())
+        }
+    }
+
+    struct FixedClock;
+
+    impl Clock for FixedClock {
+        fn now(&self) -> OffsetDateTime {
+            OffsetDateTime::UNIX_EPOCH
+        }
+    }
+
+    struct StubSkillRuntime;
+
+    impl SkillRuntime for StubSkillRuntime {
+        fn prepare(&self, _mount_path: &Utf8Path, _step: PrepareStep) -> Result<PrepareResult, RuntimeError> {
+            Ok(PrepareResult {
+                status: SkillExecutionStatus::Success,
+                artifact_path: Some("artifact".into()),
+                log_path: Some("log".into()),
+                finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            })
+        }
+
+        fn use_skill(&self, _mount_path: &Utf8Path, _step: UseStep) -> Result<UseResult, RuntimeError> {
+            Ok(UseResult {
+                status: SkillExecutionStatus::Success,
+                log_path: Some("log".into()),
+                finished_at: Some(OffsetDateTime::UNIX_EPOCH),
+            })
+        }
+
+        fn check_prepare_status(&self, _mount_path: &Utf8Path) -> Result<PrepareStatusRecord, RuntimeError> {
+            Ok(PrepareStatusRecord {
+                status: SkillExecutionStatus::Success,
+                last_run_at: Some(OffsetDateTime::UNIX_EPOCH),
+                artifact_path: Some("artifact".into()),
+                log_path: Some("log".into()),
+            })
+        }
+    }
+
+    fn sample_task() -> TaskWorkspace {
+        TaskWorkspace {
+            meta: TaskMeta {
+                id: TaskId::from("task-20260524-auth"),
+                slug: TaskSlug::from("auth-fix"),
+                title: "Auth Fix".to_owned(),
+                template: "default".to_owned(),
+                status: TaskStatus::Active,
+                description: None,
+                source_brief: None,
+                tags: vec![],
+            },
+            repos: TaskRepoSelection {
+                selected_repo_groups: vec![],
+                repos: vec![],
+            },
+            activity: TaskActivity {
+                created_at: OffsetDateTime::UNIX_EPOCH,
+                updated_at: OffsetDateTime::UNIX_EPOCH,
+                last_opened_at: None,
+                last_activity_at: Some(OffsetDateTime::UNIX_EPOCH),
+                last_editor: None,
+            },
+            paths: TaskPaths {
+                materials_dir: "materials".into(),
+                repos_dir: "repos".into(),
+                knowledge_candidates_dir: "knowledge-candidates".into(),
+                task_skills_dir: ".codex/skills".into(),
+            },
+        }
+    }
+
+    fn service_with_runtime() -> DefaultTaskSkillsApplicationService {
+        let tasks = InMemoryTaskRepository::default();
+        tasks.save(&sample_task()).unwrap();
+        let registry = InMemorySkillRegistryRepository::default();
+        registry.registry.borrow_mut().skills.push(SkillDefinition {
+            id: SkillId::from("frontend-testing"),
+            source: SkillSourceId::from("frontend-toolkit"),
+            versions: vec![SkillVersion::from("2026-05-22")],
+            latest: Some(SkillVersion::from("2026-05-22")),
+        });
+        DefaultTaskSkillsApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryTaskSkillMountRepository::default()),
+            Box::new(registry),
+            Box::new(FixedClock),
+            Some(Box::new(StubSkillRuntime)),
+        )
+    }
+
+    fn service_without_runtime() -> DefaultTaskSkillsApplicationService {
+        let tasks = InMemoryTaskRepository::default();
+        tasks.save(&sample_task()).unwrap();
+        let registry = InMemorySkillRegistryRepository::default();
+        registry.registry.borrow_mut().skills.push(SkillDefinition {
+            id: SkillId::from("frontend-testing"),
+            source: SkillSourceId::from("frontend-toolkit"),
+            versions: vec![SkillVersion::from("2026-05-22")],
+            latest: Some(SkillVersion::from("2026-05-22")),
+        });
+        DefaultTaskSkillsApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryTaskSkillMountRepository::default()),
+            Box::new(registry),
+            Box::new(FixedClock),
+            None,
+        )
+    }
+
+    #[test]
+    fn mount_skill_creates_mount_with_latest_version() {
+        let svc = service_without_runtime();
+        let summary = svc
+            .mount_skill(MountSkillCommand {
+                task_id: "task-20260524-auth".to_owned(),
+                skill_id: "frontend-testing".to_owned(),
+                version: None,
+            })
+            .unwrap();
+
+        assert_eq!(summary.skill_id, "frontend-testing");
+        assert_eq!(summary.version, "2026-05-22");
+        assert_eq!(summary.status, "active");
+        assert!(summary.path.as_str().contains("mount-001"));
+    }
+
+    #[test]
+    fn mount_skill_fails_for_missing_skill() {
+        let svc = service_without_runtime();
+        let result = svc.mount_skill(MountSkillCommand {
+            task_id: "task-20260524-auth".to_owned(),
+            skill_id: "nonexistent".to_owned(),
+            version: None,
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn mount_skill_fails_when_no_version_and_no_latest() {
+        let tasks = InMemoryTaskRepository::default();
+        tasks.save(&sample_task()).unwrap();
+        let registry = InMemorySkillRegistryRepository::default();
+        registry.registry.borrow_mut().skills.push(SkillDefinition {
+            id: SkillId::from("frontend-testing"),
+            source: SkillSourceId::from("frontend-toolkit"),
+            versions: vec![],
+            latest: None,
+        });
+        let svc = DefaultTaskSkillsApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryTaskSkillMountRepository::default()),
+            Box::new(registry),
+            Box::new(FixedClock),
+            None,
+        );
+
+        let result = svc.mount_skill(MountSkillCommand {
+            task_id: "task-20260524-auth".to_owned(),
+            skill_id: "frontend-testing".to_owned(),
+            version: None,
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn list_mounts_returns_empty_initially() {
+        let svc = service_without_runtime();
+        let mounts = svc.list_mounts(&TaskId::from("task-20260524-auth")).unwrap();
+        assert!(mounts.is_empty());
+    }
+
+    #[test]
+    fn unmount_skill_removes_mount() {
+        let svc = service_without_runtime();
+        let summary = svc
+            .mount_skill(MountSkillCommand {
+                task_id: "task-20260524-auth".to_owned(),
+                skill_id: "frontend-testing".to_owned(),
+                version: None,
+            })
+            .unwrap();
+
+        svc.unmount_skill(UnmountSkillCommand {
+            task_id: "task-20260524-auth".to_owned(),
+            mount_id: summary.mount_id.clone(),
+        })
+        .unwrap();
+
+        let mounts = svc.list_mounts(&TaskId::from("task-20260524-auth")).unwrap();
+        assert!(mounts.is_empty());
+    }
+
+    #[test]
+    fn override_skill_returns_adapter_unavailable() {
+        let svc = service_without_runtime();
+        let result = svc.override_skill(OverrideSkillCommand {
+            task_id: "task-x".to_owned(),
+            mount_id: "m1".to_owned(),
+            relative_path: "override".into(),
+        });
+        assert!(matches!(result, Err(ApplicationError::AdapterUnavailable("skill override"))));
+    }
+
+    #[test]
+    fn check_skill_updates_detects_update_available() {
+        let svc = service_without_runtime();
+        svc.mount_skill(MountSkillCommand {
+            task_id: "task-20260524-auth".to_owned(),
+            skill_id: "frontend-testing".to_owned(),
+            version: Some("2026-05-20".to_owned()),
+        })
+        .unwrap();
+
+        let updates = svc
+            .check_skill_updates(CheckSkillUpdatesQuery {
+                task_id: "task-20260524-auth".to_owned(),
+                mount_id: None,
+            })
+            .unwrap();
+        assert_eq!(updates.len(), 1);
+        assert!(updates[0].update_available);
+        assert_eq!(updates[0].target_version.as_deref(), Some("2026-05-22"));
+    }
+
+    #[test]
+    fn check_skill_updates_no_update_when_already_latest() {
+        let svc = service_without_runtime();
+        svc.mount_skill(MountSkillCommand {
+            task_id: "task-20260524-auth".to_owned(),
+            skill_id: "frontend-testing".to_owned(),
+            version: None,
+        })
+        .unwrap();
+
+        let updates = svc
+            .check_skill_updates(CheckSkillUpdatesQuery {
+                task_id: "task-20260524-auth".to_owned(),
+                mount_id: None,
+            })
+            .unwrap();
+        assert_eq!(updates.len(), 1);
+        assert!(!updates[0].update_available);
+    }
+
+    #[test]
+    fn update_skill_changes_version_to_latest() {
+        let svc = service_without_runtime();
+        svc.mount_skill(MountSkillCommand {
+            task_id: "task-20260524-auth".to_owned(),
+            skill_id: "frontend-testing".to_owned(),
+            version: Some("2026-05-20".to_owned()),
+        })
+        .unwrap();
+
+        let updated = svc
+            .update_skill(UpdateSkillCommand {
+                task_id: "task-20260524-auth".to_owned(),
+                mount_id: "mount-001".to_owned(),
+            })
+            .unwrap();
+
+        assert_eq!(updated.version, "2026-05-22");
+    }
+
+    #[test]
+    fn update_skill_fails_for_missing_mount() {
+        let svc = service_without_runtime();
+        let result = svc.update_skill(UpdateSkillCommand {
+            task_id: "task-20260524-auth".to_owned(),
+            mount_id: "mount-999".to_owned(),
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn sandbox_skill_returns_handle() {
+        let svc = service_without_runtime();
+        let handle = svc
+            .sandbox_skill(SandboxSkillCommand {
+                task_id: "task-20260524-auth".to_owned(),
+                mount_id: "mount-001".to_owned(),
+            })
+            .unwrap();
+
+        assert_eq!(handle.mount_id, "mount-001");
+        assert!(handle.path.as_str().contains("mount-001"));
+    }
+
+    #[test]
+    fn prepare_skill_with_runtime() {
+        let svc = service_with_runtime();
+        let result = svc
+            .prepare_skill(PrepareSkillCommand {
+                task_id: "task-20260524-auth".to_owned(),
+                mount_id: "mount-001".to_owned(),
+                step: super::super::dtos::RuntimeStep {
+                    name: "install".to_owned(),
+                    action_id: "npm-install".to_owned(),
+                },
+            })
+            .unwrap();
+
+        assert!(result.status.contains("Success"));
+        assert!(result.artifact_path.is_some());
+        assert!(result.log_path.is_some());
+    }
+
+    #[test]
+    fn prepare_skill_fails_without_runtime() {
+        let svc = service_without_runtime();
+        let result = svc.prepare_skill(PrepareSkillCommand {
+            task_id: "task-20260524-auth".to_owned(),
+            mount_id: "mount-001".to_owned(),
+            step: super::super::dtos::RuntimeStep {
+                name: "install".to_owned(),
+                action_id: "npm-install".to_owned(),
+            },
+        });
+        assert!(matches!(result, Err(ApplicationError::AdapterUnavailable(..))));
+    }
+
+    #[test]
+    fn use_skill_with_runtime() {
+        let svc = service_with_runtime();
+        let result = svc
+            .use_skill(UseSkillCommand {
+                task_id: "task-20260524-auth".to_owned(),
+                mount_id: "mount-001".to_owned(),
+                step: super::super::dtos::RuntimeStep {
+                    name: "lint".to_owned(),
+                    action_id: "eslint".to_owned(),
+                },
+            })
+            .unwrap();
+
+        assert!(result.status.contains("Success"));
+        assert!(result.log_path.is_some());
+    }
+
+    #[test]
+    fn use_skill_fails_without_runtime() {
+        let svc = service_without_runtime();
+        let result = svc.use_skill(UseSkillCommand {
+            task_id: "task-20260524-auth".to_owned(),
+            mount_id: "mount-001".to_owned(),
+            step: super::super::dtos::RuntimeStep {
+                name: "lint".to_owned(),
+                action_id: "eslint".to_owned(),
+            },
+        });
+        assert!(matches!(result, Err(ApplicationError::AdapterUnavailable(..))));
+    }
+
+    #[test]
+    fn get_prepare_status_with_runtime() {
+        let svc = service_with_runtime();
+        let result = svc
+            .get_prepare_status(PrepareStatusQuery {
+                task_id: "task-20260524-auth".to_owned(),
+                mount_id: "mount-001".to_owned(),
+            })
+            .unwrap();
+
+        assert_eq!(result.status, SkillExecutionStatus::Success);
+        assert!(result.artifact_path.is_some());
+    }
+
+    #[test]
+    fn get_prepare_status_fails_without_runtime() {
+        let svc = service_without_runtime();
+        let result = svc.get_prepare_status(PrepareStatusQuery {
+            task_id: "task-20260524-auth".to_owned(),
+            mount_id: "mount-001".to_owned(),
+        });
+        assert!(matches!(result, Err(ApplicationError::AdapterUnavailable(..))));
+    }
+}

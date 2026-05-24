@@ -104,6 +104,7 @@ mod tests {
 
     use crate::ports::Clock;
 
+    use crate::skill_registry::ImportedSkillDefinition;
     use super::*;
 
     struct InMemorySkillRegistryRepository {
@@ -175,5 +176,87 @@ mod tests {
 
         assert_eq!(shown.id, "frontend-testing");
         assert_eq!(shown.source, "frontend-toolkit");
+    }
+
+    #[test]
+    fn import_source_rejects_duplicate_source() {
+        let service = DefaultSkillRegistryApplicationService::new(
+            Box::new(InMemorySkillRegistryRepository::default()),
+            Box::new(FixedClock),
+        );
+        service
+            .import_source(ImportSkillSourceCommand {
+                source_id: "frontend-toolkit".to_owned(),
+                kind: ApplicationSkillSourceKind::Local,
+                location: "C:/skills".to_owned(),
+                reference: None,
+                skills: vec![],
+            })
+            .unwrap();
+
+        let result = service.import_source(ImportSkillSourceCommand {
+            source_id: "frontend-toolkit".to_owned(),
+            kind: ApplicationSkillSourceKind::Local,
+            location: "C:/skills2".to_owned(),
+            reference: None,
+            skills: vec![],
+        });
+        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "skill-source"));
+    }
+
+    #[test]
+    fn import_source_rejects_duplicate_skill() {
+        let service = DefaultSkillRegistryApplicationService::new(
+            Box::new(InMemorySkillRegistryRepository::default()),
+            Box::new(FixedClock),
+        );
+        service
+            .import_source(ImportSkillSourceCommand {
+                source_id: "frontend-toolkit".to_owned(),
+                kind: ApplicationSkillSourceKind::Local,
+                location: "C:/skills".to_owned(),
+                reference: None,
+                skills: vec![ImportedSkillDefinition {
+                    id: "frontend-testing".to_owned(),
+                    versions: vec![],
+                    latest: None,
+                }],
+            })
+            .unwrap();
+
+        let result = service.import_source(ImportSkillSourceCommand {
+            source_id: "frontend-toolkit-2".to_owned(),
+            kind: ApplicationSkillSourceKind::Local,
+            location: "C:/skills2".to_owned(),
+            reference: None,
+            skills: vec![ImportedSkillDefinition {
+                id: "frontend-testing".to_owned(),
+                versions: vec![],
+                latest: None,
+            }],
+        });
+        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "skill"));
+    }
+
+    #[test]
+    fn show_skill_returns_none_for_missing() {
+        let service = DefaultSkillRegistryApplicationService::new(
+            Box::new(InMemorySkillRegistryRepository::default()),
+            Box::new(FixedClock),
+        );
+        let result = service.show_skill(ShowSkillQuery { skill_id: "nonexistent".to_owned() }).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn list_skill_versions_returns_empty_for_missing() {
+        let service = DefaultSkillRegistryApplicationService::new(
+            Box::new(InMemorySkillRegistryRepository::default()),
+            Box::new(FixedClock),
+        );
+        let versions = service
+            .list_skill_versions(ShowSkillQuery { skill_id: "nonexistent".to_owned() })
+            .unwrap();
+        assert!(versions.is_empty());
     }
 }

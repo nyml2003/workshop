@@ -1,4 +1,5 @@
 use camino::Utf8PathBuf;
+use serde::Serialize;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MountSkillCommand {
@@ -7,7 +8,7 @@ pub struct MountSkillCommand {
     pub version: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct SkillMountSummary {
     pub task_id: String,
     pub mount_id: String,
@@ -69,7 +70,7 @@ pub struct PrepareStatusQuery {
     pub mount_id: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct SkillUpdateStatus {
     pub mount_id: String,
     pub update_available: bool,

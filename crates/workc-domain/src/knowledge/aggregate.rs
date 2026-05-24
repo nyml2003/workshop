@@ -10,3 +10,14 @@ impl Default for KnowledgeBase {
         Self { entries: Vec::new() }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_has_empty_entries() {
+        let kb = KnowledgeBase::default();
+        assert!(kb.entries.is_empty());
+    }
+}

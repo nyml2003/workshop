@@ -101,18 +101,6 @@ impl TaskApplicationService for DefaultTaskApplicationService {
     }
 
     fn create_task(&self, command: CreateTaskCommand) -> Result<CreateTaskResult, ApplicationError> {
-        if !command.selected_repo_groups.is_empty() {
-            return Err(ApplicationError::InvalidRequest(
-                "repo-group enrichment is not supported in this phase".to_owned(),
-            ));
-        }
-
-        if !command.initial_skills.is_empty() {
-            return Err(ApplicationError::InvalidRequest(
-                "initial skill mounts are not supported in this phase".to_owned(),
-            ));
-        }
-
         let slug = TaskSlug::from(command.slug.as_str());
 
         if self.tasks.find_by_slug(&slug)?.is_some() {
@@ -351,7 +339,7 @@ mod tests {
     }
 
     #[test]
-    fn create_task_rejects_initial_skill_inputs() {
+    fn create_task_accepts_initial_skills_and_repo_groups() {
         let service = service(InMemoryTaskRepository::default(), RecordingEditorLauncher::default());
 
         let result = service.create_task(CreateTaskCommand {
@@ -361,12 +349,14 @@ mod tests {
             description: None,
             source_brief: None,
             tags: vec![],
-            selected_repo_groups: vec![],
+            selected_repo_groups: vec!["auth-core".to_owned()],
             repos: vec![],
             initial_skills: vec!["frontend-testing".to_owned()],
         });
 
-        assert!(matches!(result, Err(ApplicationError::InvalidRequest(message)) if message.contains("initial skill mounts")));
+        assert!(result.is_ok());
+        let created = result.unwrap();
+        assert_eq!(created.slug.as_str(), "auth-session-fix");
     }
 
     #[test]
@@ -457,5 +447,112 @@ mod tests {
             .unwrap();
         assert_eq!(stored.activity.last_opened_at, None);
         assert_eq!(stored.activity.last_editor, None);
+    }
+
+    #[test]
+    fn close_task_sets_status_to_closed() {
+        let repo = InMemoryTaskRepository::default();
+        repo.save(&sample_task(
+            "task-20260524-auth-session-fix",
+            "auth-session-fix",
+            "Fix session renewal",
+            None,
+        ))
+        .unwrap();
+        let service = service(repo, RecordingEditorLauncher::default());
+
+        service
+            .close_task(CloseTaskCommand {
+                task_id: "task-20260524-auth-session-fix".to_owned(),
+            })
+            .unwrap();
+
+        let stored = service
+            .tasks
+            .find_by_id(&TaskId::from("task-20260524-auth-session-fix"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.meta.status, TaskStatus::Closed);
+    }
+
+    #[test]
+    fn close_task_fails_for_missing_task() {
+        let repo = InMemoryTaskRepository::default();
+        let service = service(repo, RecordingEditorLauncher::default());
+
+        let result = service.close_task(CloseTaskCommand {
+            task_id: "task-missing".to_owned(),
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn create_task_rejects_duplicate_slug() {
+        let repo = InMemoryTaskRepository::default();
+        repo.save(&sample_task(
+            "task-20260524-auth-session-fix",
+            "auth-session-fix",
+            "Fix session renewal",
+            None,
+        ))
+        .unwrap();
+        let service = service(repo, RecordingEditorLauncher::default());
+
+        let result = service.create_task(CreateTaskCommand {
+            slug: "auth-session-fix".to_owned(),
+            title: "Duplicate".to_owned(),
+            template: "default".to_owned(),
+            description: None,
+            source_brief: None,
+            tags: vec![],
+            selected_repo_groups: vec![],
+            repos: vec![],
+            initial_skills: vec![],
+        });
+        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "task"));
+    }
+
+    #[test]
+    fn list_tasks_respects_limit() {
+        let repo = InMemoryTaskRepository::default();
+        repo.save(&sample_task("task-a", "a", "A", None)).unwrap();
+        repo.save(&sample_task("task-b", "b", "B", None)).unwrap();
+        repo.save(&sample_task("task-c", "c", "C", None)).unwrap();
+        let service = service(repo, RecordingEditorLauncher::default());
+
+        let items = service
+            .list_tasks(ListTasksQuery {
+                status: None,
+                tag: None,
+                limit: Some(2),
+            })
+            .unwrap();
+
+        assert_eq!(items.len(), 2);
+    }
+
+    #[test]
+    fn list_tasks_empty_with_no_tasks() {
+        let repo = InMemoryTaskRepository::default();
+        let service = service(repo, RecordingEditorLauncher::default());
+
+        let items = service
+            .list_tasks(ListTasksQuery {
+                status: None,
+                tag: None,
+                limit: None,
+            })
+            .unwrap();
+
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn load_task_by_id_returns_error_for_missing() {
+        let repo = InMemoryTaskRepository::default();
+        let service = service(repo, RecordingEditorLauncher::default());
+
+        let result = service.load_task(&TaskRef::Id("task-missing".to_owned()));
+        assert!(result.is_err());
     }
 }

@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ApplicationSkillSourceKind {
     Git,
@@ -27,7 +29,7 @@ pub struct ImportedSkillDefinition {
     pub latest: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct SkillSummary {
     pub id: String,
     pub source: String,

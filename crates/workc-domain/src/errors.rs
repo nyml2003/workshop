@@ -45,3 +45,65 @@ impl Display for DomainError {
 }
 
 impl Error for DomainError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn not_found_display() {
+        let err = DomainError::NotFound {
+            entity: "task",
+            id: "task-123".to_owned(),
+        };
+        assert_eq!(err.to_string(), "task not found: task-123");
+    }
+
+    #[test]
+    fn already_exists_display() {
+        let err = DomainError::AlreadyExists {
+            entity: "repo",
+            id: "api-gateway".to_owned(),
+        };
+        assert_eq!(err.to_string(), "repo already exists: api-gateway");
+    }
+
+    #[test]
+    fn invalid_input_display() {
+        let err = DomainError::InvalidInput {
+            field: "slug",
+            reason: "slug cannot be empty".to_owned(),
+        };
+        assert_eq!(err.to_string(), "invalid input for slug: slug cannot be empty");
+    }
+
+    #[test]
+    fn conflict_display() {
+        let err = DomainError::Conflict {
+            entity: "task",
+            reason: "already closed".to_owned(),
+        };
+        assert_eq!(err.to_string(), "task conflict: already closed");
+    }
+
+    #[test]
+    fn external_command_failed_display() {
+        let err = DomainError::ExternalCommandFailed {
+            command: "git",
+            detail: "not a git repository".to_owned(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "external command failed (git): not a git repository"
+        );
+    }
+
+    #[test]
+    fn io_error_display() {
+        let err = DomainError::IoError {
+            operation: "create dir",
+            detail: "permission denied".to_owned(),
+        };
+        assert_eq!(err.to_string(), "io error during create dir: permission denied");
+    }
+}

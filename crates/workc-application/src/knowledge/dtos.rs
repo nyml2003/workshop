@@ -1,4 +1,5 @@
 use camino::Utf8PathBuf;
+use serde::Serialize;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateKnowledgeCandidateCommand {
@@ -67,7 +68,7 @@ pub struct DeleteKnowledgeCommand {
     pub knowledge_id: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct KnowledgeObjectSummary {
     pub id: String,
     pub title: String,
@@ -77,18 +78,18 @@ pub struct KnowledgeObjectSummary {
     pub source_count: usize,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct CandidateMutationResult {
     pub task_id: String,
     pub candidate: KnowledgeObjectSummary,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct KnowledgeMutationResult {
     pub knowledge: KnowledgeObjectSummary,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct PromoteKnowledgeResult {
     pub task_id: String,
     pub candidate_id: String,

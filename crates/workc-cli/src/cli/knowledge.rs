@@ -9,7 +9,7 @@ use workc_application::knowledge::{
 use workc_infrastructure::fs::knowledge_repository::FsKnowledgeRepository;
 use workc_infrastructure::time::system_clock::SystemClock;
 
-use crate::presenters::text;
+use crate::presenters::Presenter;
 
 #[derive(Subcommand, Debug)]
 pub enum KnowledgeCommand {
@@ -123,7 +123,7 @@ fn knowledge_service() -> Result<DefaultKnowledgeApplicationService> {
     ))
 }
 
-pub fn run(command: KnowledgeCommand) -> Result<String> {
+pub fn run(command: KnowledgeCommand, presenter: &dyn Presenter) -> Result<String> {
     let service = knowledge_service()?;
 
     match command {
@@ -137,11 +137,11 @@ pub fn run(command: KnowledgeCommand) -> Result<String> {
                     tags: args.tags,
                     source_paths: args.sources,
                 })?;
-                Ok(text::render_knowledge_detail(&result.candidate))
+                Ok(presenter.render_knowledge_detail(&result.candidate))
             }
             KnowledgeCandidateCommand::List(args) => {
                 let items = service.list_candidates(ListKnowledgeCandidatesQuery { task_id: args.task_id })?;
-                Ok(text::render_knowledge_list(&items))
+                Ok(presenter.render_knowledge_list(&items))
             }
             KnowledgeCandidateCommand::Show(args) => {
                 let item = service.show_candidate(ShowKnowledgeCandidateQuery {
@@ -149,8 +149,8 @@ pub fn run(command: KnowledgeCommand) -> Result<String> {
                     candidate_id: args.candidate_id,
                 })?;
                 Ok(item
-                    .map(|value| text::render_knowledge_detail(&value))
-                    .unwrap_or_else(|| "Knowledge candidate not found.".to_owned()))
+                    .map(|value| presenter.render_knowledge_detail(&value))
+                    .unwrap_or_else(|| presenter.render_message("Knowledge candidate not found.")))
             }
             KnowledgeCandidateCommand::UpdateMeta(args) => {
                 let result = service.update_candidate_meta(UpdateKnowledgeCandidateMetaCommand {
@@ -160,27 +160,27 @@ pub fn run(command: KnowledgeCommand) -> Result<String> {
                     category: args.category,
                     tags: args.tags,
                 })?;
-                Ok(text::render_knowledge_detail(&result.candidate))
+                Ok(presenter.render_knowledge_detail(&result.candidate))
             }
             KnowledgeCandidateCommand::Delete(args) => {
                 service.delete_candidate(DeleteKnowledgeCandidateCommand {
                     task_id: args.task_id,
                     candidate_id: args.candidate_id,
                 })?;
-                Ok("Deleted knowledge candidate".to_owned())
+                Ok(presenter.render_message("Deleted knowledge candidate"))
             }
         },
         KnowledgeCommand::List => {
             let items = service.list_knowledge(ListKnowledgeQuery)?;
-            Ok(text::render_knowledge_list(&items))
+            Ok(presenter.render_knowledge_list(&items))
         }
         KnowledgeCommand::Show(args) => {
             let item = service.show_knowledge(ShowKnowledgeQuery {
                 knowledge_id: args.knowledge_id,
             })?;
             Ok(item
-                .map(|value| text::render_knowledge_detail(&value))
-                .unwrap_or_else(|| "Knowledge not found.".to_owned()))
+                .map(|value| presenter.render_knowledge_detail(&value))
+                .unwrap_or_else(|| presenter.render_message("Knowledge not found.")))
         }
         KnowledgeCommand::UpdateMeta(args) => {
             let result = service.update_knowledge_meta(UpdateKnowledgeMetaCommand {
@@ -189,13 +189,13 @@ pub fn run(command: KnowledgeCommand) -> Result<String> {
                 category: args.category,
                 tags: args.tags,
             })?;
-            Ok(text::render_knowledge_detail(&result.knowledge))
+            Ok(presenter.render_knowledge_detail(&result.knowledge))
         }
         KnowledgeCommand::Delete(args) => {
             service.delete_knowledge(DeleteKnowledgeCommand {
                 knowledge_id: args.knowledge_id,
             })?;
-            Ok("Deleted knowledge".to_owned())
+            Ok(presenter.render_message("Deleted knowledge"))
         }
         KnowledgeCommand::Promote(args) => {
             let result = service.promote(PromoteKnowledgeCommand {
@@ -206,7 +206,7 @@ pub fn run(command: KnowledgeCommand) -> Result<String> {
                 category: args.category,
                 tags: args.tags,
             })?;
-            Ok(text::render_knowledge_detail(&result.knowledge))
+            Ok(presenter.render_knowledge_detail(&result.knowledge))
         }
     }
 }

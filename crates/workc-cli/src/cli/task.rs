@@ -8,19 +8,23 @@ use workc_application::task::{
     ApplicationTaskStatus, CloseTaskCommand, CreateTaskCommand, DefaultTaskApplicationService, ListTasksQuery, OpenTaskCommand,
     TaskApplicationService, TaskRef,
 };
+use workc_application::task_skills::{MountSkillCommand, TaskSkillsApplicationService};
 #[cfg(target_os = "windows")]
 use workc_infrastructure::editor::windows::WindowsEditorLauncher;
 #[cfg(target_os = "macos")]
 use workc_infrastructure::editor::macos::MacOsEditorLauncher;
 use workc_infrastructure::fs::task_repository::{DefaultTaskIdGenerator, FsTaskRepository};
+use workc_infrastructure::fs::{FsSkillRegistryRepository, FsTaskSkillMountRepository};
 use workc_infrastructure::time::system_clock::SystemClock;
 
-use crate::presenters::text;
+use crate::presenters::{self, Presenter};
 use super::repo::{RepoCommand, RepoGroupCommand, TaskReposCommand};
 
 #[derive(Parser, Debug)]
 #[command(name = "workc")]
 pub struct Cli {
+    #[arg(long, global = true)]
+    pub json: bool,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -176,6 +180,11 @@ fn to_task_status(value: TaskStatusArg) -> ApplicationTaskStatus {
 pub fn run() -> Result<String> {
     let cli = Cli::parse();
     let service = task_service()?;
+    let presenter: Box<dyn Presenter> = if cli.json {
+        Box::new(presenters::json::JsonPresenter)
+    } else {
+        Box::new(presenters::TextPresenter)
+    };
 
     match cli.command {
         Command::List(command) => {
@@ -184,7 +193,7 @@ pub fn run() -> Result<String> {
                 tag: command.tag,
                 limit: command.limit,
             })?;
-            Ok(text::render_task_list(&items))
+            Ok(presenter.render_task_list(&items))
         }
         Command::Open(command) => {
             let editor = command.editor.clone().map(to_editor_kind);
@@ -199,12 +208,12 @@ pub fn run() -> Result<String> {
                     EditorArg::Vscode => "vscode",
                 })
                 .unwrap_or("unknown");
-            Ok(text::render_task_opened(&command.task, editor_name))
+            Ok(presenter.render_task_opened(&command.task, editor_name))
         }
-        Command::Repo { command } => super::repo::run_repo(command),
-        Command::RepoGroup { command } => super::repo::run_repo_group(command),
-        Command::Skill { command } => super::skill::run(command),
-        Command::Knowledge { command } => super::knowledge::run(command),
+        Command::Repo { command } => super::repo::run_repo(command, presenter.as_ref()),
+        Command::RepoGroup { command } => super::repo::run_repo_group(command, presenter.as_ref()),
+        Command::Skill { command } => super::skill::run(command, presenter.as_ref()),
+        Command::Knowledge { command } => super::knowledge::run(command, presenter.as_ref()),
         Command::Task(task_command) => match task_command.command {
             TaskSubcommand::Create(command) => {
                 let result = service.create_task(CreateTaskCommand {
@@ -213,25 +222,39 @@ pub fn run() -> Result<String> {
                     template: command.template,
                     description: command.description,
                     source_brief: command.source_brief,
-                    tags: command.tags,
+                    tags: command.tags.clone(),
                     selected_repo_groups: command.selected_repo_groups,
                     repos: command.repos,
-                    initial_skills: command.skills,
+                    initial_skills: command.skills.clone(),
                 })?;
-                Ok(text::render_task_created(
-                    &result.task_id,
-                    &result.slug,
-                    &result.title,
-                    &result.template,
-                ))
+
+                if !command.skills.is_empty() {
+                    let workspace_root = workspace_root()?;
+                    let skill_service = workc_application::task_skills::DefaultTaskSkillsApplicationService::new(
+                        Box::new(FsTaskRepository::new(workspace_root.clone())),
+                        Box::new(FsTaskSkillMountRepository::new(workspace_root.clone())),
+                        Box::new(FsSkillRegistryRepository::new(workspace_root)),
+                        Box::new(SystemClock),
+                        None,
+                    );
+                    for skill_id in &command.skills {
+                        skill_service.mount_skill(MountSkillCommand {
+                            task_id: result.task_id.clone(),
+                            skill_id: skill_id.clone(),
+                            version: None,
+                        })?;
+                    }
+                }
+
+                Ok(presenter.render_task_created(&result))
             }
             TaskSubcommand::Close(command) => {
                 service.close_task(CloseTaskCommand {
                     task_id: command.task_id,
                 })?;
-                Ok("Closed task".to_owned())
+                Ok(presenter.render_message("Closed task"))
             }
-            TaskSubcommand::Repos { command } => super::repo::run_task_repos(command),
+            TaskSubcommand::Repos { command } => super::repo::run_task_repos(command, presenter.as_ref()),
         },
     }
 }

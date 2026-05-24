@@ -26,7 +26,7 @@ pub struct DefaultTaskReposApplicationService {
     tasks: Box<dyn TaskRepository>,
     repo_catalog: Box<dyn RepoCatalogRepository>,
     clock: Box<dyn Clock>,
-    git_client: Option<Box<dyn GitClient>>,
+    git_client: Box<dyn GitClient>,
 }
 
 impl DefaultTaskReposApplicationService {
@@ -34,7 +34,7 @@ impl DefaultTaskReposApplicationService {
         tasks: Box<dyn TaskRepository>,
         repo_catalog: Box<dyn RepoCatalogRepository>,
         clock: Box<dyn Clock>,
-        git_client: Option<Box<dyn GitClient>>,
+        git_client: Box<dyn GitClient>,
     ) -> Self {
         Self {
             tasks,
@@ -228,11 +228,6 @@ impl TaskReposApplicationService for DefaultTaskReposApplicationService {
                 .collect());
         }
 
-        let git_client = self
-            .git_client
-            .as_ref()
-            .ok_or(ApplicationError::AdapterUnavailable("task clone"))?;
-
         let mut outcomes = Vec::new();
         let now = self.clock.now();
         let mut touched = false;
@@ -249,7 +244,7 @@ impl TaskReposApplicationService for DefaultTaskReposApplicationService {
                 continue;
             }
 
-            git_client
+            self.git_client
                 .clone_repo(path.as_path(), &url)
                 .map_err(|error| ApplicationError::ExternalFailure {
                     port: "git",
@@ -307,11 +302,7 @@ impl TaskReposApplicationService for DefaultTaskReposApplicationService {
                     }
                 }
             } else {
-                let git_client = self
-                    .git_client
-                    .as_ref()
-                    .ok_or(ApplicationError::AdapterUnavailable("repo status"))?;
-                git_client
+                self.git_client
                     .get_repo_status(path.as_path())
                     .map_err(|error| ApplicationError::ExternalFailure {
                         port: "git",
@@ -478,17 +469,13 @@ mod tests {
             Ok(())
         }
 
-        fn get_repo_status(&self, path: &camino::Utf8Path) -> Result<RepoStatus, crate::ports::GitError> {
+        fn get_repo_status(&self, _path: &camino::Utf8Path) -> Result<RepoStatus, crate::ports::GitError> {
             Ok(RepoStatus {
                 branch: Some("main".to_owned()),
                 dirty: false,
                 ahead: 0,
                 behind: 0,
-                clone_state: if path.exists() {
-                    CloneState::Ready
-                } else {
-                    CloneState::Missing
-                },
+                clone_state: CloneState::Ready,
             })
         }
 
@@ -513,7 +500,7 @@ mod tests {
             Box::new(FixedClock {
                 now: OffsetDateTime::UNIX_EPOCH + time::Duration::hours(1),
             }),
-            None,
+            Box::new(RecordingGitClient),
         );
 
         let result = service
@@ -540,7 +527,7 @@ mod tests {
             Box::new(FixedClock {
                 now: OffsetDateTime::UNIX_EPOCH,
             }),
-            None,
+            Box::new(RecordingGitClient),
         );
 
         let result = service.add_task_repos(AddTaskReposCommand {
@@ -565,7 +552,7 @@ mod tests {
             Box::new(FixedClock {
                 now: OffsetDateTime::UNIX_EPOCH,
             }),
-            Some(Box::new(RecordingGitClient)),
+            Box::new(RecordingGitClient),
         );
 
         let result = service
@@ -595,7 +582,7 @@ mod tests {
             Box::new(FixedClock {
                 now: OffsetDateTime::UNIX_EPOCH,
             }),
-            Some(Box::new(RecordingGitClient)),
+            Box::new(RecordingGitClient),
         );
 
         let result = service
@@ -609,5 +596,259 @@ mod tests {
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].status.clone_state, CloneState::Missing);
+    }
+
+    #[test]
+    fn remove_task_repos_removes_repository() {
+        let tasks = InMemoryTaskRepository::default();
+        let mut task = sample_task();
+        task.repos.repos = vec![RepoId::from("api-gateway"), RepoId::from("auth-service")];
+        tasks.save(&task).unwrap();
+        let service = DefaultTaskReposApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryRepoCatalogRepository {
+                catalog: RefCell::new(sample_catalog()),
+            }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
+            Box::new(RecordingGitClient),
+        );
+
+        let result = service
+            .remove_task_repos(RemoveTaskReposCommand {
+                task_id: "task-20260524-auth-session-fix".to_owned(),
+                repos: vec!["api-gateway".to_owned()],
+            })
+            .unwrap();
+
+        assert_eq!(result.repos.len(), 1);
+        assert_eq!(result.repos[0], "auth-service");
+    }
+
+    #[test]
+    fn clone_task_repos_real_execution_uses_git_client() {
+        let tasks = InMemoryTaskRepository::default();
+        let mut task = sample_task();
+        task.repos.repos = vec![RepoId::from("api-gateway")];
+        tasks.save(&task).unwrap();
+        let service = DefaultTaskReposApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryRepoCatalogRepository {
+                catalog: RefCell::new(sample_catalog()),
+            }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
+            Box::new(RecordingGitClient),
+        );
+
+        let result = service
+            .clone_task_repos(CloneTaskReposCommand {
+                task_id: "task-20260524-auth-session-fix".to_owned(),
+                repos: None,
+                missing_only: false,
+                dry_run: false,
+            })
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert!(result[0].cloned);
+        assert!(!result[0].dry_run);
+    }
+
+    #[test]
+    fn get_repo_statuses_with_real_git() {
+        let tasks = InMemoryTaskRepository::default();
+        let mut task = sample_task();
+        task.repos.repos = vec![RepoId::from("api-gateway")];
+        tasks.save(&task).unwrap();
+        let service = DefaultTaskReposApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryRepoCatalogRepository {
+                catalog: RefCell::new(sample_catalog()),
+            }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
+            Box::new(RecordingGitClient),
+        );
+
+        let result = service
+            .get_repo_statuses(RepoStatusQuery {
+                task_id: "task-20260524-auth-session-fix".to_owned(),
+                repos: None,
+                clone_state: None,
+                dry_run: false,
+            })
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].status.clone_state, CloneState::Ready);
+        assert_eq!(result[0].status.branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn get_repo_statuses_filters_by_dirty_clone_state() {
+        let tasks = InMemoryTaskRepository::default();
+        let mut task = sample_task();
+        task.repos.repos = vec![RepoId::from("api-gateway")];
+        tasks.save(&task).unwrap();
+        let service = DefaultTaskReposApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryRepoCatalogRepository {
+                catalog: RefCell::new(sample_catalog()),
+            }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
+            Box::new(RecordingGitClient),
+        );
+
+        let result = service
+            .get_repo_statuses(RepoStatusQuery {
+                task_id: "task-20260524-auth-session-fix".to_owned(),
+                repos: None,
+                clone_state: Some(CloneStateFilter::Dirty),
+                dry_run: false,
+            })
+            .unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn set_task_repos_with_groups_only() {
+        let tasks = InMemoryTaskRepository::default();
+        let mut task = sample_task();
+        task.repos.repos = vec![];
+        task.repos.selected_repo_groups = vec![];
+        tasks.save(&task).unwrap();
+        let service = DefaultTaskReposApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryRepoCatalogRepository {
+                catalog: RefCell::new(sample_catalog()),
+            }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
+            Box::new(RecordingGitClient),
+        );
+
+        let result = service
+            .set_task_repos(SetTaskReposCommand {
+                task_id: "task-20260524-auth-session-fix".to_owned(),
+                selected_repo_groups: vec!["auth-core".to_owned()],
+                repos: vec![],
+            })
+            .unwrap();
+
+        assert_eq!(result.repos.len(), 2);
+    }
+
+    #[test]
+    fn clone_task_repos_missing_only_skips_existing() {
+        let tasks = InMemoryTaskRepository::default();
+        let mut task = sample_task();
+        task.repos.repos = vec![RepoId::from("api-gateway")];
+        tasks.save(&task).unwrap();
+        let service = DefaultTaskReposApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryRepoCatalogRepository {
+                catalog: RefCell::new(sample_catalog()),
+            }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
+            Box::new(RecordingGitClient),
+        );
+
+        let result = service
+            .clone_task_repos(CloneTaskReposCommand {
+                task_id: "task-20260524-auth-session-fix".to_owned(),
+                repos: None,
+                missing_only: true,
+                dry_run: false,
+            })
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert!(result[0].cloned);
+    }
+
+    #[test]
+    fn load_task_by_slug_fallback() {
+        let tasks = InMemoryTaskRepository::default();
+        tasks.save(&sample_task()).unwrap();
+        let service = DefaultTaskReposApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryRepoCatalogRepository {
+                catalog: RefCell::new(sample_catalog()),
+            }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
+            Box::new(RecordingGitClient),
+        );
+
+        let result = service.set_task_repos(SetTaskReposCommand {
+            task_id: "auth-session-fix".to_owned(),
+            selected_repo_groups: vec![],
+            repos: vec!["api-gateway".to_owned()],
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn get_repo_statuses_filters_by_ready_clone_state() {
+        let tasks = InMemoryTaskRepository::default();
+        let mut task = sample_task();
+        task.repos.repos = vec![RepoId::from("api-gateway")];
+        tasks.save(&task).unwrap();
+        let service = DefaultTaskReposApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryRepoCatalogRepository {
+                catalog: RefCell::new(sample_catalog()),
+            }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
+            Box::new(RecordingGitClient),
+        );
+
+        let result = service
+            .get_repo_statuses(RepoStatusQuery {
+                task_id: "task-20260524-auth-session-fix".to_owned(),
+                repos: None,
+                clone_state: Some(CloneStateFilter::Ready),
+                dry_run: false,
+            })
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].status.clone_state, CloneState::Ready);
+    }
+
+    #[test]
+    fn resolve_group_repos_fails_for_unknown_group() {
+        let tasks = InMemoryTaskRepository::default();
+        tasks.save(&sample_task()).unwrap();
+        let service = DefaultTaskReposApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryRepoCatalogRepository {
+                catalog: RefCell::new(sample_catalog()),
+            }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
+            Box::new(RecordingGitClient),
+        );
+
+        let result = service.set_task_repos(SetTaskReposCommand {
+            task_id: "task-20260524-auth-session-fix".to_owned(),
+            selected_repo_groups: vec!["nonexistent".to_owned()],
+            repos: vec![],
+        });
+        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo-group"));
     }
 }

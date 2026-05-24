@@ -1,4 +1,5 @@
 use camino::Utf8PathBuf;
+use serde::Serialize;
 use workc_domain::shared::Timestamp;
 
 use crate::ports::RepoStatus;
@@ -30,7 +31,7 @@ pub struct CloneTaskReposCommand {
     pub dry_run: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct RepoCloneOutcome {
     pub repo_id: String,
     pub path: Utf8PathBuf,
@@ -47,7 +48,7 @@ pub struct RepoStatusQuery {
     pub dry_run: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct TaskRepoStatusItem {
     pub repo_id: String,
     pub path: Utf8PathBuf,
@@ -62,7 +63,7 @@ pub enum CloneStateFilter {
     Unknown,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct TaskReposResult {
     pub task_id: String,
     pub selected_repo_groups: Vec<String>,

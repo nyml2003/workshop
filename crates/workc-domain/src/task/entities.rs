@@ -100,3 +100,119 @@ impl TaskMeta {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::errors::DomainError;
+
+    fn valid_meta() -> TaskMeta {
+        TaskMeta::new(
+            TaskId::from("task-20260524-test"),
+            TaskSlug::from("test-slug"),
+            "Test Title".to_owned(),
+            "default".to_owned(),
+            Some("Description".to_owned()),
+            Some("Source brief".to_owned()),
+            vec!["rust".to_owned(), "cli".to_owned()],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn creates_meta_with_valid_inputs() {
+        let meta = valid_meta();
+        assert_eq!(meta.id.as_str(), "task-20260524-test");
+        assert_eq!(meta.slug.as_str(), "test-slug");
+        assert_eq!(meta.title, "Test Title");
+        assert_eq!(meta.template, "default");
+        assert_eq!(meta.status, TaskStatus::Active);
+        assert_eq!(meta.description.as_deref(), Some("Description"));
+        assert_eq!(meta.source_brief.as_deref(), Some("Source brief"));
+        assert_eq!(meta.tags, vec!["rust", "cli"]);
+    }
+
+    #[test]
+    fn rejects_empty_slug() {
+        let result = TaskMeta::new(
+            TaskId::from("task-20260524-test"),
+            TaskSlug::from(" "),
+            "Title".to_owned(),
+            "default".to_owned(),
+            None,
+            None,
+            vec![],
+        );
+        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "slug"));
+    }
+
+    #[test]
+    fn rejects_empty_title() {
+        let result = TaskMeta::new(
+            TaskId::from("task-20260524-test"),
+            TaskSlug::from("slug"),
+            "".to_owned(),
+            "default".to_owned(),
+            None,
+            None,
+            vec![],
+        );
+        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "title"));
+    }
+
+    #[test]
+    fn rejects_whitespace_only_title() {
+        let result = TaskMeta::new(
+            TaskId::from("task-20260524-test"),
+            TaskSlug::from("slug"),
+            "   ".to_owned(),
+            "default".to_owned(),
+            None,
+            None,
+            vec![],
+        );
+        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "title"));
+    }
+
+    #[test]
+    fn rejects_empty_template() {
+        let result = TaskMeta::new(
+            TaskId::from("task-20260524-test"),
+            TaskSlug::from("slug"),
+            "Title".to_owned(),
+            "".to_owned(),
+            None,
+            None,
+            vec![],
+        );
+        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "template"));
+    }
+
+    #[test]
+    fn rejects_empty_tag_in_list() {
+        let result = TaskMeta::new(
+            TaskId::from("task-20260524-test"),
+            TaskSlug::from("slug"),
+            "Title".to_owned(),
+            "default".to_owned(),
+            None,
+            None,
+            vec!["rust".to_owned(), "".to_owned(), "cli".to_owned()],
+        );
+        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "tags"));
+    }
+
+    #[test]
+    fn accepts_empty_tags_vec() {
+        let result = TaskMeta::new(
+            TaskId::from("task-20260524-test"),
+            TaskSlug::from("slug"),
+            "Title".to_owned(),
+            "default".to_owned(),
+            None,
+            None,
+            vec![],
+        );
+        assert!(result.is_ok());
+    }
+}

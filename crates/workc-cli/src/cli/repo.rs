@@ -12,7 +12,7 @@ use workc_infrastructure::git::command_git_client::CommandGitClient;
 use workc_infrastructure::fs::{FsRepoCatalogRepository, FsTaskRepository};
 use workc_infrastructure::time::system_clock::SystemClock;
 
-use crate::presenters::text;
+use crate::presenters::Presenter;
 
 #[derive(Subcommand, Debug)]
 pub enum RepoCommand {
@@ -124,7 +124,7 @@ fn task_repos_service() -> Result<DefaultTaskReposApplicationService> {
         Box::new(FsTaskRepository::new(workspace_root.clone())),
         Box::new(FsRepoCatalogRepository::new(workspace_root)),
         Box::new(SystemClock),
-        Some(Box::new(CommandGitClient)),
+        Box::new(CommandGitClient),
     ))
 }
 
@@ -137,7 +137,7 @@ fn to_clone_state_filter(value: CloneStateArg) -> CloneStateFilter {
     }
 }
 
-pub fn run_repo(command: RepoCommand) -> Result<String> {
+pub fn run_repo(command: RepoCommand, presenter: &dyn Presenter) -> Result<String> {
     let service = repo_catalog_service()?;
     match command {
         RepoCommand::Add(args) => {
@@ -147,16 +147,16 @@ pub fn run_repo(command: RepoCommand) -> Result<String> {
                 tags: args.tags,
                 description: args.description,
             })?;
-            Ok(text::render_repo_created(&repo))
+            Ok(presenter.render_repo_created(&repo))
         }
         RepoCommand::List => {
             let repos = service.list_repos()?;
-            Ok(text::render_repo_list(&repos))
+            Ok(presenter.render_repo_list(&repos))
         }
     }
 }
 
-pub fn run_repo_group(command: RepoGroupCommand) -> Result<String> {
+pub fn run_repo_group(command: RepoGroupCommand, presenter: &dyn Presenter) -> Result<String> {
     let service = repo_catalog_service()?;
     match command {
         RepoGroupCommand::Add(args) => {
@@ -171,16 +171,16 @@ pub fn run_repo_group(command: RepoGroupCommand) -> Result<String> {
                 tags: args.tags,
                 description: args.description,
             })?;
-            Ok(text::render_repo_group_created(&group))
+            Ok(presenter.render_repo_group_created(&group))
         }
         RepoGroupCommand::List => {
             let groups = service.list_repo_groups()?;
-            Ok(text::render_repo_group_list(&groups))
+            Ok(presenter.render_repo_group_list(&groups))
         }
     }
 }
 
-pub fn run_task_repos(command: TaskReposCommand) -> Result<String> {
+pub fn run_task_repos(command: TaskReposCommand, presenter: &dyn Presenter) -> Result<String> {
     let service = task_repos_service()?;
     let result = match command {
         TaskReposCommand::Set(args) => service.set_task_repos(SetTaskReposCommand {
@@ -203,7 +203,7 @@ pub fn run_task_repos(command: TaskReposCommand) -> Result<String> {
                 missing_only: args.missing,
                 dry_run: args.dry_run,
             })?;
-            return Ok(text::render_repo_clone_outcomes(&outcomes));
+            return Ok(presenter.render_repo_clone_outcomes(&outcomes));
         }
         TaskReposCommand::Status(args) => {
             let items = service.get_repo_statuses(RepoStatusQuery {
@@ -212,9 +212,9 @@ pub fn run_task_repos(command: TaskReposCommand) -> Result<String> {
                 clone_state: args.clone_state.map(to_clone_state_filter),
                 dry_run: args.dry_run,
             })?;
-            return Ok(text::render_repo_statuses(&items));
+            return Ok(presenter.render_repo_statuses(&items));
         }
     };
 
-    Ok(text::render_task_repos_result(&result))
+    Ok(presenter.render_task_repos_result(&result))
 }

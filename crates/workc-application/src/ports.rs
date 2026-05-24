@@ -2,10 +2,11 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use camino::{Utf8Path, Utf8PathBuf};
+use serde::Serialize;
 use workc_domain::shared::Timestamp;
 use workc_domain::skill_registry::entities::{PrepareResult, PrepareStep, SkillExecutionStatus, UseResult, UseStep};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum CloneState {
     Missing,
     Ready,
@@ -13,7 +14,7 @@ pub enum CloneState {
     Unknown,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct RepoStatus {
     pub branch: Option<String>,
     pub dirty: bool,
@@ -22,10 +23,11 @@ pub struct RepoStatus {
     pub clone_state: CloneState,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum EditorKind {
     Cursor,
     VsCode,
+    #[serde(untagged)]
     Other(String),
 }
 

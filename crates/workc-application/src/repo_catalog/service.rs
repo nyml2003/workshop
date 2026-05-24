@@ -204,4 +204,134 @@ mod tests {
 
         assert!(matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo"));
     }
+
+    #[test]
+    fn add_repo_rejects_duplicate() {
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        service
+            .add_repo(AddRepoCommand {
+                id: "auth-service".to_owned(),
+                url: "git@github.com:example/auth-service.git".to_owned(),
+                tags: vec![],
+                description: None,
+            })
+            .unwrap();
+
+        let result = service.add_repo(AddRepoCommand {
+            id: "auth-service".to_owned(),
+            url: "git@github.com:example/auth-service-2.git".to_owned(),
+            tags: vec![],
+            description: None,
+        });
+        assert!(matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "repo"));
+    }
+
+    #[test]
+    fn add_repo_rejects_empty_url() {
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        let result = service.add_repo(AddRepoCommand {
+            id: "auth-service".to_owned(),
+            url: "   ".to_owned(),
+            tags: vec![],
+            description: None,
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn add_repo_group_creates_successfully_when_repos_exist() {
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        service
+            .add_repo(AddRepoCommand {
+                id: "auth-service".to_owned(),
+                url: "git@github.com:example/auth-service.git".to_owned(),
+                tags: vec![],
+                description: None,
+            })
+            .unwrap();
+
+        let group = service
+            .add_repo_group(AddRepoGroupCommand {
+                id: "auth-core".to_owned(),
+                repos: vec!["auth-service".to_owned()],
+                tags: vec!["core".to_owned()],
+                description: None,
+            })
+            .unwrap();
+
+        assert_eq!(group.id, "auth-core");
+        assert_eq!(group.repos, vec!["auth-service"]);
+    }
+
+    #[test]
+    fn add_repo_group_rejects_empty_repos_list() {
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        let result = service.add_repo_group(AddRepoGroupCommand {
+            id: "auth-core".to_owned(),
+            repos: vec![],
+            tags: vec![],
+            description: None,
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn list_repos_sorts_alphabetically() {
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        service
+            .add_repo(AddRepoCommand {
+                id: "zulu".to_owned(),
+                url: "url-z".to_owned(),
+                tags: vec![],
+                description: None,
+            })
+            .unwrap();
+        service
+            .add_repo(AddRepoCommand {
+                id: "alpha".to_owned(),
+                url: "url-a".to_owned(),
+                tags: vec![],
+                description: None,
+            })
+            .unwrap();
+
+        let repos = service.list_repos().unwrap();
+        assert_eq!(repos.len(), 2);
+        assert_eq!(repos[0].id, "alpha");
+        assert_eq!(repos[1].id, "zulu");
+    }
+
+    #[test]
+    fn list_repo_groups_sorts_alphabetically() {
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(InMemoryRepoCatalogRepository::default()));
+        service
+            .add_repo(AddRepoCommand {
+                id: "auth-service".to_owned(),
+                url: "url".to_owned(),
+                tags: vec![],
+                description: None,
+            })
+            .unwrap();
+
+        service
+            .add_repo_group(AddRepoGroupCommand {
+                id: "z-group".to_owned(),
+                repos: vec!["auth-service".to_owned()],
+                tags: vec![],
+                description: None,
+            })
+            .unwrap();
+        service
+            .add_repo_group(AddRepoGroupCommand {
+                id: "a-group".to_owned(),
+                repos: vec!["auth-service".to_owned()],
+                tags: vec![],
+                description: None,
+            })
+            .unwrap();
+
+        let groups = service.list_repo_groups().unwrap();
+        assert_eq!(groups[0].id, "a-group");
+        assert_eq!(groups[1].id, "z-group");
+    }
 }

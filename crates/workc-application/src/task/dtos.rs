@@ -1,8 +1,9 @@
+use serde::Serialize;
 use workc_domain::shared::Timestamp;
 
 use crate::ports::EditorKind;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum ApplicationTaskStatus {
     Draft,
     Active,
@@ -17,7 +18,7 @@ pub struct ListTasksQuery {
     pub limit: Option<usize>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct TaskListItem {
     pub id: String,
     pub slug: String,
@@ -39,7 +40,7 @@ pub struct CreateTaskCommand {
     pub initial_skills: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct CreateTaskResult {
     pub task_id: String,
     pub slug: String,

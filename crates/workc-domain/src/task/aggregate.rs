@@ -58,3 +58,99 @@ impl TaskWorkspace {
         self.activity.last_activity_at = Some(occurred_at);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use time::OffsetDateTime;
+
+    use super::*;
+    use crate::shared::{RepoGroupId, RepoId, TaskId, TaskSlug};
+    use crate::task::value_objects::TaskStatus;
+
+    fn sample_task() -> TaskWorkspace {
+        TaskWorkspace::create(
+            TaskId::from("task-20260524-test"),
+            TaskSlug::from("test-slug"),
+            "Test Title".to_owned(),
+            "default".to_owned(),
+            Some("Description".to_owned()),
+            Some("Source brief".to_owned()),
+            vec!["rust".to_owned()],
+            vec![RepoGroupId::from("auth-core")],
+            vec![RepoId::from("api-gateway")],
+            OffsetDateTime::UNIX_EPOCH,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn create_sets_initial_activity() {
+        let task = sample_task();
+        assert_eq!(task.activity.created_at, OffsetDateTime::UNIX_EPOCH);
+        assert_eq!(task.activity.updated_at, OffsetDateTime::UNIX_EPOCH);
+        assert_eq!(task.activity.last_activity_at, Some(OffsetDateTime::UNIX_EPOCH));
+        assert_eq!(task.activity.last_opened_at, None);
+        assert_eq!(task.activity.last_editor, None);
+        assert_eq!(task.meta.status, TaskStatus::Active);
+    }
+
+    #[test]
+    fn create_stores_repo_selection() {
+        let task = sample_task();
+        assert_eq!(task.repos.selected_repo_groups.len(), 1);
+        assert_eq!(task.repos.selected_repo_groups[0].as_str(), "auth-core");
+        assert_eq!(task.repos.repos.len(), 1);
+        assert_eq!(task.repos.repos[0].as_str(), "api-gateway");
+    }
+
+    #[test]
+    fn create_propagates_meta_validation_error() {
+        let result = TaskWorkspace::create(
+            TaskId::from("task-20260524-test"),
+            TaskSlug::from(""),
+            "Title".to_owned(),
+            "default".to_owned(),
+            None,
+            None,
+            vec![],
+            vec![],
+            vec![],
+            OffsetDateTime::UNIX_EPOCH,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn mark_opened_updates_activity_fields() {
+        let mut task = sample_task();
+        let later = OffsetDateTime::UNIX_EPOCH + time::Duration::hours(2);
+
+        task.mark_opened(later, "cursor".to_owned());
+
+        assert_eq!(task.activity.updated_at, later);
+        assert_eq!(task.activity.last_opened_at, Some(later));
+        assert_eq!(task.activity.last_activity_at, Some(later));
+        assert_eq!(task.activity.last_editor.as_deref(), Some("cursor"));
+    }
+
+    #[test]
+    fn close_sets_status_to_closed() {
+        let mut task = sample_task();
+        let later = OffsetDateTime::UNIX_EPOCH + time::Duration::days(5);
+
+        task.close(later);
+
+        assert_eq!(task.meta.status, TaskStatus::Closed);
+        assert_eq!(task.activity.updated_at, later);
+        assert_eq!(task.activity.last_activity_at, Some(later));
+    }
+
+    #[test]
+    fn paths_are_set_to_default_values() {
+        let task = sample_task();
+        assert_eq!(task.paths.materials_dir.as_str(), "materials");
+        assert_eq!(task.paths.repos_dir.as_str(), "repos");
+        assert_eq!(task.paths.knowledge_candidates_dir.as_str(), "knowledge-candidates");
+        assert_eq!(task.paths.task_skills_dir.as_str(), ".codex/skills");
+    }
+}

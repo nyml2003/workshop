@@ -6,12 +6,13 @@ use workc_application::skill_registry::{
     ShowSkillQuery, SkillRegistryApplicationService,
 };
 use workc_application::task_skills::{
-    DefaultTaskSkillsApplicationService, MountSkillCommand, TaskSkillsApplicationService, UnmountSkillCommand,
+    CheckSkillUpdatesQuery, DefaultTaskSkillsApplicationService, MountSkillCommand,
+    TaskSkillsApplicationService, UnmountSkillCommand,
 };
 use workc_infrastructure::fs::{FsSkillRegistryRepository, FsTaskRepository, FsTaskSkillMountRepository};
 use workc_infrastructure::time::system_clock::SystemClock;
 
-use crate::presenters::text;
+use crate::presenters::Presenter;
 
 #[derive(Subcommand, Debug)]
 pub enum SkillCommand {
@@ -21,6 +22,7 @@ pub enum SkillCommand {
     Mount(SkillMountArgs),
     Mounts(SkillMountsArgs),
     Unmount(SkillUnmountArgs),
+    CheckUpdates(SkillCheckUpdatesArgs),
 }
 
 #[derive(Args, Debug)]
@@ -63,6 +65,13 @@ pub struct SkillUnmountArgs {
     pub mount_id: String,
 }
 
+#[derive(Args, Debug)]
+pub struct SkillCheckUpdatesArgs {
+    pub task: String,
+    #[arg(long)]
+    pub mount_id: Option<String>,
+}
+
 #[derive(ValueEnum, Clone, Debug)]
 pub enum SkillSourceKindArg {
     Git,
@@ -102,7 +111,7 @@ fn to_source_kind(value: SkillSourceKindArg) -> ApplicationSkillSourceKind {
     }
 }
 
-pub fn run(command: SkillCommand) -> Result<String> {
+pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
     match command {
         SkillCommand::Import(args) => {
             let service = registry_service()?;
@@ -122,19 +131,19 @@ pub fn run(command: SkillCommand) -> Result<String> {
                     })
                     .unwrap_or_default(),
             })?;
-            Ok(format!("Imported skill source {}", args.source_id))
+            Ok(presenter.render_message(&format!("Imported skill source {}", args.source_id)))
         }
         SkillCommand::Show(args) => {
             let service = registry_service()?;
             let skill = service.show_skill(ShowSkillQuery { skill_id: args.skill_id })?;
             Ok(skill
-                .map(|item| text::render_skill_summary(&item))
-                .unwrap_or_else(|| "Skill not found.".to_owned()))
+                .map(|item| presenter.render_skill_summary(&item))
+                .unwrap_or_else(|| presenter.render_message("Skill not found.")))
         }
         SkillCommand::Versions(args) => {
             let service = registry_service()?;
             let versions = service.list_skill_versions(ShowSkillQuery { skill_id: args.skill_id })?;
-            Ok(text::render_skill_versions(&versions))
+            Ok(presenter.render_skill_versions(&versions))
         }
         SkillCommand::Mount(args) => {
             let service = task_skill_service()?;
@@ -143,7 +152,7 @@ pub fn run(command: SkillCommand) -> Result<String> {
                 skill_id: args.skill_id,
                 version: args.version,
             })?;
-            Ok(text::render_skill_mount(&summary))
+            Ok(presenter.render_skill_mount(&summary))
         }
         SkillCommand::Mounts(args) => {
             let service = task_skill_service()?;
@@ -151,7 +160,7 @@ pub fn run(command: SkillCommand) -> Result<String> {
                 return Err(anyhow!("skill mounts currently requires a task-id"));
             }
             let mounts = service.list_mounts(&workc_application::task::TaskId::from(args.task.as_str()))?;
-            Ok(text::render_skill_mounts(&mounts))
+            Ok(presenter.render_skill_mounts(&mounts))
         }
         SkillCommand::Unmount(args) => {
             let service = task_skill_service()?;
@@ -159,7 +168,15 @@ pub fn run(command: SkillCommand) -> Result<String> {
                 task_id: args.task,
                 mount_id: args.mount_id,
             })?;
-            Ok("Unmounted skill".to_owned())
+            Ok(presenter.render_message("Unmounted skill"))
+        }
+        SkillCommand::CheckUpdates(args) => {
+            let service = task_skill_service()?;
+            let updates = service.check_skill_updates(CheckSkillUpdatesQuery {
+                task_id: args.task,
+                mount_id: args.mount_id,
+            })?;
+            Ok(presenter.render_skill_updates(&updates))
         }
     }
 }

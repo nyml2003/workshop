@@ -8,5 +8,6 @@ rust-version.workspace = true
 [dependencies]
 anyhow.workspace = true
 camino.workspace = true
+serde.workspace = true
 time.workspace = true
 workc-domain = { path = "../workc-domain" }
