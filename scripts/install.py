@@ -102,7 +102,10 @@ def _add_to_path():
             capture_output=True,
             text=True,
         )
-        print(f"Added {BIN_DIR} to user PATH (restart terminal to apply)")
+        print(f"Added {BIN_DIR} to user PATH")
+        print()
+        print("For this terminal, run:")
+        print(f"  $env:Path = \"{BIN_DIR};$env:Path\"")
         return
 
     home = os.path.expanduser("~")
