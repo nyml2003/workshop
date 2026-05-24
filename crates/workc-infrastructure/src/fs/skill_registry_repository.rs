@@ -1,6 +1,6 @@
 use std::fs;
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
 use workc_domain::errors::DomainError;
@@ -58,6 +58,21 @@ impl Default for FsSkillRegistryRepository {
 impl FsSkillRegistryRepository {
     fn registry_root() -> Utf8PathBuf {
         paths::workc_skills_registry_root()
+    }
+
+    pub fn cache_local_source(&self, source_id: &str, version: &str, src_dir: &Utf8Path) -> Result<(), DomainError> {
+        let cache_dir = paths::workc_skills_cache_root()
+            .join(source_id)
+            .join(version);
+        fs::create_dir_all(&cache_dir).map_err(|e| DomainError::IoError {
+            operation: "create skill cache dir",
+            detail: e.to_string(),
+        })?;
+        copy_dir(src_dir, &cache_dir).map_err(|e| DomainError::IoError {
+            operation: "copy skill files to cache",
+            detail: e.to_string(),
+        })?;
+        Ok(())
     }
 
     fn sources_path() -> Utf8PathBuf {
@@ -220,6 +235,24 @@ impl SkillRegistryRepository for FsSkillRegistryRepository {
             .into_iter()
             .find(|skill| skill.id == *id))
     }
+}
+
+fn copy_dir(src: &Utf8Path, dst: &Utf8Path) -> std::io::Result<()> {
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let name = Utf8PathBuf::from_path_buf(entry.path()).map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "non-utf8 path")
+        })?;
+        let target = dst.join(name.file_name().unwrap_or_default());
+        if file_type.is_dir() {
+            fs::create_dir_all(&target)?;
+            copy_dir(&name, &target)?;
+        } else {
+            fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
 }
 
 fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {

@@ -115,6 +115,13 @@ fn to_source_kind(value: SkillSourceKindArg) -> ApplicationSkillSourceKind {
 pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
     match command {
         SkillCommand::Import(args) => {
+            let workspace_root = workspace_root()?;
+            let reg = FsSkillRegistryRepository::new();
+            if matches!(args.kind, SkillSourceKindArg::Local) {
+                let src_dir = workspace_root.join(&args.location);
+                let version = args.version.as_deref().unwrap_or("latest");
+                reg.cache_local_source(&args.source_id, version, &src_dir)?;
+            }
             let service = registry_service()?;
             service.import_source(ImportSkillSourceCommand {
                 source_id: args.source_id.clone(),
