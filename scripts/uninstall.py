@@ -60,15 +60,20 @@ def _remove_workc_home():
 
 
 def main():
-    if sys.stdin.isatty():
-        print("This will remove ~/.workc/ and clean up PATH entries.")
-        resp = input("Continue? [y/N] ").strip().lower()
-        if resp not in ("y", "yes"):
-            print("Cancelled.")
+    args = sys.argv[1:]
+    force = "--yes" in args or "-y" in args
+
+    if not force:
+        if sys.stdin.isatty():
+            print("This will remove ~/.workc/ and clean up PATH entries.")
+            resp = input("Continue? [y/N] ").strip().lower()
+            if resp not in ("y", "yes"):
+                print("Cancelled.")
+                return
+        else:
+            print("This will remove ~/.workc/ and clean up PATH entries.")
+            print("Run with --yes to skip confirmation, or run interactively.")
             return
-    else:
-        print("This will remove ~/.workc/ and clean up PATH entries.")
-        print("Run interactively (python3 uninstall.py) to confirm, or use --yes to skip.")
 
     _remove_path_entries()
     _remove_workc_home()
