@@ -1,7 +1,7 @@
 """workc installer — one-line setup, no cargo required.
 
 Usage (online):
-  python3 -c "$(curl -fsSL https://raw.githubusercontent.com/org/workc/main/scripts/install.py)"
+  python3 -c "$(curl -fsSL https://raw.githubusercontent.com/nyml2003/workshop/main/scripts/install.py)"
 
 Usage (offline, from release zip):
   unzip workc-macos-arm64.zip && python3 install.py
@@ -19,7 +19,7 @@ import sys
 import urllib.request
 import zipfile
 
-REPO = "org/workc"
+REPO = "nyml2003/workshop"
 WORKC_HOME = os.path.join(os.path.expanduser("~"), ".workc")
 BIN_DIR = os.path.join(WORKC_HOME, "bin")
 
