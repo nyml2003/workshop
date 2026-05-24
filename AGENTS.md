@@ -31,6 +31,17 @@ python3 install.py
 
 卸载：`python3 -c "$(curl -fsSL https://raw.githubusercontent.com/org/workc/main/scripts/uninstall.py)"`
 
+## 发布新版本
+
+推送 `v*` tag 触发 GitHub Actions，自动构建四个平台的 release 产物：
+
+```
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+每个 zip 包含：`workc` 二进制 + `install.py` + `init.py` + `uninstall.py`。
+
 ## 数据模型
 
 | 位置 | 内容 | 说明 |
