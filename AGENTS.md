@@ -20,11 +20,11 @@ Makefile.toml          # cargo-make 任务定义
 ## 安装（面向用户）
 
 ```
-# 在线一行安装
+# macOS / Linux
 curl -fsSL https://raw.githubusercontent.com/nyml2003/workshop/master/scripts/install.py | python3
 
-# 离线（从 Release zip 解压后）
-python3 install.py
+# Windows
+irm https://raw.githubusercontent.com/nyml2003/workshop/master/scripts/install.py | python
 ```
 
 脚本从 GitHub Releases 下载预编译二进制，安装到 `~/.workc/bin/`，不依赖 Rust 工具链。
