@@ -19,7 +19,9 @@ impl CommandGitClient {
             })?;
 
         if !upstream.status.success() {
-            return Ok((0, 0));
+            return Err(GitError {
+                detail: "no upstream configured".to_owned(),
+            });
         }
 
         let rev_list = Command::new("git")
@@ -35,13 +37,17 @@ impl CommandGitClient {
             })?;
 
         if !rev_list.status.success() {
-            return Ok((0, 0));
+            return Err(GitError {
+                detail: "git rev-list failed".to_owned(),
+            });
         }
 
         let output = String::from_utf8_lossy(&rev_list.stdout).trim().to_owned();
         let parts: Vec<&str> = output.split('\t').collect();
         if parts.len() != 2 {
-            return Ok((0, 0));
+            return Err(GitError {
+                detail: format!("unexpected rev-list output: {output}"),
+            });
         }
 
         let behind = parts[0].trim().parse::<usize>().unwrap_or(0);

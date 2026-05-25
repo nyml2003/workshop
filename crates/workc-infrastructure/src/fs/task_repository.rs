@@ -312,7 +312,7 @@ fn parse_timestamp_value(value: &TimestampValue) -> Result<Timestamp, DomainErro
 }
 
 fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {
-    move |error| DomainError::IoError {
+    move |error| DomainError::PersistenceFailed {
         operation,
         detail: error.to_string(),
     }
@@ -431,3 +431,4 @@ task_skills = "skills"
         fs::remove_dir_all(project_root).unwrap();
     }
 }
+

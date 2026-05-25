@@ -70,11 +70,11 @@ impl FsSkillRegistryRepository {
         let cache_dir = paths::workc_skills_cache_root()
             .join(source_id)
             .join(version);
-        fs::create_dir_all(&cache_dir).map_err(|e| DomainError::IoError {
+        fs::create_dir_all(&cache_dir).map_err(|e| DomainError::PersistenceFailed {
             operation: "create skill cache dir",
             detail: e.to_string(),
         })?;
-        copy_dir(src_dir, &cache_dir).map_err(|e| DomainError::IoError {
+        copy_dir(src_dir, &cache_dir).map_err(|e| DomainError::PersistenceFailed {
             operation: "copy skill files to cache",
             detail: e.to_string(),
         })?;
@@ -262,7 +262,7 @@ fn copy_dir(src: &Utf8Path, dst: &Utf8Path) -> std::io::Result<()> {
 }
 
 fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {
-    move |error| DomainError::IoError {
+    move |error| DomainError::PersistenceFailed {
         operation,
         detail: error.to_string(),
     }
@@ -281,3 +281,4 @@ fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> Domain
         reason: error.to_string(),
     }
 }
+

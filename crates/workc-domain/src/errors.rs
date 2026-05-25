@@ -19,11 +19,7 @@ pub enum DomainError {
         entity: &'static str,
         reason: String,
     },
-    ExternalCommandFailed {
-        command: &'static str,
-        detail: String,
-    },
-    IoError {
+    PersistenceFailed {
         operation: &'static str,
         detail: String,
     },
@@ -38,11 +34,8 @@ impl Display for DomainError {
                 write!(f, "invalid input for {field}: {reason}")
             }
             Self::Conflict { entity, reason } => write!(f, "{entity} conflict: {reason}"),
-            Self::ExternalCommandFailed { command, detail } => {
-                write!(f, "external command failed ({command}): {detail}")
-            }
-            Self::IoError { operation, detail } => {
-                write!(f, "io error during {operation}: {detail}")
+            Self::PersistenceFailed { operation, detail } => {
+                write!(f, "persistence error during {operation}: {detail}")
             }
         }
     }
@@ -94,26 +87,14 @@ mod tests {
     }
 
     #[test]
-    fn external_command_failed_display() {
-        let err = DomainError::ExternalCommandFailed {
-            command: "git",
-            detail: "not a git repository".to_owned(),
+    fn persistence_failed_display() {
+        let err = DomainError::PersistenceFailed {
+            operation: "save",
+            detail: "disk full".to_owned(),
         };
         assert_eq!(
             err.to_string(),
-            "external command failed (git): not a git repository"
-        );
-    }
-
-    #[test]
-    fn io_error_display() {
-        let err = DomainError::IoError {
-            operation: "create dir",
-            detail: "permission denied".to_owned(),
-        };
-        assert_eq!(
-            err.to_string(),
-            "io error during create dir: permission denied"
+            "persistence error during save: disk full"
         );
     }
 }

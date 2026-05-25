@@ -348,7 +348,7 @@ impl KnowledgeRepository for FsKnowledgeRepository {
 }
 
 fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {
-    move |error| DomainError::IoError {
+    move |error| DomainError::PersistenceFailed {
         operation,
         detail: error.to_string(),
     }
@@ -367,3 +367,4 @@ fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> Domain
         reason: error.to_string(),
     }
 }
+

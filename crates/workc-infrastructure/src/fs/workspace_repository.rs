@@ -99,7 +99,7 @@ impl WorkspaceRegistryRepository for FsWorkspaceRegistryRepository {
         if !path.exists() {
             return Ok(Vec::new());
         }
-        let raw = fs::read_to_string(&path).map_err(|error| DomainError::IoError {
+        let raw = fs::read_to_string(&path).map_err(|error| DomainError::PersistenceFailed {
             operation: "read workspaces",
             detail: error.to_string(),
         })?;
@@ -117,7 +117,7 @@ impl WorkspaceRegistryRepository for FsWorkspaceRegistryRepository {
             field: "workspaces path",
             reason: "no parent directory".to_owned(),
         })?;
-        fs::create_dir_all(parent).map_err(|error| DomainError::IoError {
+        fs::create_dir_all(parent).map_err(|error| DomainError::PersistenceFailed {
             operation: "create workc home",
             detail: error.to_string(),
         })?;
@@ -129,10 +129,11 @@ impl WorkspaceRegistryRepository for FsWorkspaceRegistryRepository {
                 reason: error.to_string(),
             })?,
         )
-        .map_err(|error| DomainError::IoError {
+        .map_err(|error| DomainError::PersistenceFailed {
             operation: "write workspaces",
             detail: error.to_string(),
         })?;
         Ok(())
     }
 }
+

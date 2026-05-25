@@ -171,7 +171,7 @@ impl RepoCatalogRepository for FsRepoCatalogRepository {
 }
 
 fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {
-    move |error| DomainError::IoError {
+    move |error| DomainError::PersistenceFailed {
         operation,
         detail: error.to_string(),
     }
@@ -221,3 +221,4 @@ mod tests {
         };
     }
 }
+
