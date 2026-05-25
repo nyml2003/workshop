@@ -89,7 +89,7 @@ impl TaskApplicationService for DefaultTaskApplicationService {
                 .then_with(|| left.meta.slug.as_str().cmp(right.meta.slug.as_str()))
         });
 
-        let limit = query.limit.unwrap_or(tasks.len());
+        let limit = query.limit.filter(|&l| l > 0).unwrap_or(tasks.len());
 
         Ok(tasks
             .into_iter()

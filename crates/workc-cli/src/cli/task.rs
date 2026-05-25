@@ -1,6 +1,6 @@
 use super::knowledge::KnowledgeCommand;
 use super::skill::SkillCommand;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use workc_application::ports::{Clock, EditorKind};
@@ -262,7 +262,7 @@ pub fn run() -> Result<String> {
                 .find(|e| e.slug.as_str() == command.task)
                 .map(|e| task_service_for_root(e.path.clone()))
                 .transpose()?
-                .unwrap_or(service);
+                .ok_or_else(|| anyhow!("workspace not found: {}", command.task))?;
 
             workspace_service.open_task(OpenTaskCommand {
                 task: parse_task_ref(&command.task),

@@ -70,7 +70,12 @@ impl FsWorkspaceRegistryRepository {
                     slug: TaskSlug::from(w.slug),
                     path: Utf8PathBuf::from(w.path),
                     title: w.title,
-                    status: WorkspaceStatus::parse(&w.status).unwrap_or(WorkspaceStatus::Active),
+                    status: WorkspaceStatus::parse(&w.status).ok_or_else(|| {
+                        DomainError::InvalidInput {
+                            field: "workspace status",
+                            reason: format!("unknown status: {}", w.status),
+                        }
+                    })?,
                     last_activity_at: w
                         .last_activity_at
                         .map(|raw| {
