@@ -1,6 +1,6 @@
 use super::knowledge::KnowledgeCommand;
 use super::skill::SkillCommand;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use camino::Utf8PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use workc_application::ports::{Clock, EditorKind};
@@ -23,6 +23,7 @@ use workc_infrastructure::fs::{
 use workc_infrastructure::time::system_clock::SystemClock;
 
 use super::repo::{RepoCommand, RepoGroupCommand, TaskReposCommand};
+use super::shared::workspace_root;
 use crate::presenters::{self, Presenter};
 
 #[derive(Parser, Debug)]
@@ -132,10 +133,6 @@ pub enum TaskStatusArg {
     Archived,
 }
 
-fn workspace_root() -> Result<Utf8PathBuf> {
-    Utf8PathBuf::from_path_buf(std::env::current_dir()?)
-        .map_err(|path| anyhow!("workspace root is not valid UTF-8: {}", path.display()))
-}
 
 fn task_service() -> Result<DefaultTaskApplicationService> {
     let workspace_root = workspace_root()?;
@@ -334,3 +331,5 @@ pub fn run() -> Result<String> {
         },
     }
 }
+
+

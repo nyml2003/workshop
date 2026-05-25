@@ -53,10 +53,26 @@ impl TaskWorkspace {
         self.activity.last_editor = Some(editor);
     }
 
-    pub fn close(&mut self, occurred_at: Timestamp) {
+    pub fn close(&mut self, occurred_at: Timestamp) -> Result<(), DomainError> {
+        match self.meta.status {
+            super::value_objects::TaskStatus::Closed => {
+                return Err(DomainError::Conflict {
+                    entity: "task",
+                    reason: "already closed".to_owned(),
+                });
+            }
+            super::value_objects::TaskStatus::Archived => {
+                return Err(DomainError::Conflict {
+                    entity: "task",
+                    reason: "archived tasks cannot be closed".to_owned(),
+                });
+            }
+            _ => {}
+        }
         self.meta.status = super::value_objects::TaskStatus::Closed;
         self.activity.updated_at = occurred_at;
         self.activity.last_activity_at = Some(occurred_at);
+        Ok(())
     }
 }
 
@@ -142,7 +158,7 @@ mod tests {
         let mut task = sample_task();
         let later = OffsetDateTime::UNIX_EPOCH + time::Duration::days(5);
 
-        task.close(later);
+        task.close(later).unwrap();
 
         assert_eq!(task.meta.status, TaskStatus::Closed);
         assert_eq!(task.activity.updated_at, later);

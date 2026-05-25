@@ -37,6 +37,7 @@ pub struct CreateTaskCommand {
     pub tags: Vec<String>,
     pub selected_repo_groups: Vec<String>,
     pub repos: Vec<String>,
+    // skills are mounted by CLI layer after task creation, not consumed here
     pub initial_skills: Vec<String>,
 }
 

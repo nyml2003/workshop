@@ -17,6 +17,7 @@ use workc_infrastructure::fs::{
 use workc_infrastructure::time::system_clock::SystemClock;
 
 use crate::presenters::Presenter;
+use super::shared::workspace_root;
 
 #[derive(Subcommand, Debug)]
 pub enum SkillCommand {
@@ -83,10 +84,6 @@ pub enum SkillSourceKindArg {
     Archive,
 }
 
-fn workspace_root() -> Result<Utf8PathBuf> {
-    Utf8PathBuf::from_path_buf(std::env::current_dir()?)
-        .map_err(|path| anyhow!("workspace root is not valid UTF-8: {}", path.display()))
-}
 
 fn registry_service() -> Result<DefaultSkillRegistryApplicationService> {
     Ok(DefaultSkillRegistryApplicationService::new(
@@ -225,3 +222,5 @@ fn copy_skill_files(src: &Utf8PathBuf, dst: &Utf8PathBuf) -> Result<()> {
     }
     Ok(())
 }
+
+

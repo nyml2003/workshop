@@ -181,7 +181,7 @@ impl TaskApplicationService for DefaultTaskApplicationService {
                     id: command.task_id.clone(),
                 })
             })?;
-        task.close(self.clock.now());
+        task.close(self.clock.now())?;
         self.tasks.save(&task)?;
         Ok(())
     }

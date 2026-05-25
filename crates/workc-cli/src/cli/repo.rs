@@ -1,5 +1,4 @@
-use anyhow::{Result, anyhow};
-use camino::Utf8PathBuf;
+use anyhow::Result;
 use clap::{Args, Subcommand};
 use workc_application::repo_catalog::{
     AddRepoCommand, AddRepoGroupCommand, DefaultRepoCatalogApplicationService,
@@ -15,6 +14,7 @@ use workc_infrastructure::git::command_git_client::CommandGitClient;
 use workc_infrastructure::time::system_clock::SystemClock;
 
 use crate::presenters::Presenter;
+use super::shared::workspace_root;
 
 #[derive(Subcommand, Debug)]
 pub enum RepoCommand {
@@ -108,10 +108,6 @@ pub enum CloneStateArg {
     Unknown,
 }
 
-fn workspace_root() -> Result<Utf8PathBuf> {
-    Utf8PathBuf::from_path_buf(std::env::current_dir()?)
-        .map_err(|path| anyhow!("workspace root is not valid UTF-8: {}", path.display()))
-}
 
 fn repo_catalog_service() -> Result<DefaultRepoCatalogApplicationService> {
     Ok(DefaultRepoCatalogApplicationService::new(Box::new(
@@ -219,3 +215,5 @@ pub fn run_task_repos(command: TaskReposCommand, presenter: &dyn Presenter) -> R
 
     Ok(presenter.render_task_repos_result(&result))
 }
+
+

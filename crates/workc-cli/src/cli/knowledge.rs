@@ -1,5 +1,4 @@
-use anyhow::{Result, anyhow};
-use camino::Utf8PathBuf;
+use anyhow::Result;
 use clap::{Args, Subcommand};
 use workc_application::knowledge::{
     CreateKnowledgeCandidateCommand, DefaultKnowledgeApplicationService,
@@ -12,6 +11,7 @@ use workc_infrastructure::fs::knowledge_repository::FsKnowledgeRepository;
 use workc_infrastructure::time::system_clock::SystemClock;
 
 use crate::presenters::Presenter;
+use super::shared::workspace_root;
 
 #[derive(Subcommand, Debug)]
 pub enum KnowledgeCommand {
@@ -112,10 +112,6 @@ pub struct KnowledgePromoteArgs {
     pub tags: Option<Vec<String>>,
 }
 
-fn workspace_root() -> Result<Utf8PathBuf> {
-    Utf8PathBuf::from_path_buf(std::env::current_dir()?)
-        .map_err(|path| anyhow!("workspace root is not valid UTF-8: {}", path.display()))
-}
 
 fn knowledge_service() -> Result<DefaultKnowledgeApplicationService> {
     let workspace_root = workspace_root()?;
@@ -215,3 +211,5 @@ pub fn run(command: KnowledgeCommand, presenter: &dyn Presenter) -> Result<Strin
         }
     }
 }
+
+

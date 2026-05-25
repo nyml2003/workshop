@@ -147,7 +147,13 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
             })?;
 
         let mut mounts = self.mounts.list_for_task(&task.meta.id)?;
-        let mount_id = MountId::from(format!("mount-{:03}", mounts.len() + 1));
+        let max_id = mounts
+            .iter()
+            .filter_map(|m| m.id.as_str().strip_prefix("mount-"))
+            .filter_map(|s| s.parse::<usize>().ok())
+            .max()
+            .unwrap_or(0);
+        let mount_id = MountId::from(format!("mount-{:03}", max_id + 1));
         let mount = TaskSkillMount {
             id: mount_id.clone(),
             skill_id: skill_id.clone(),
