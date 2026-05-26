@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use serde::Serialize;
 use workc_domain::shared::Timestamp;
 
@@ -59,7 +59,10 @@ mod tests {
     #[test]
     fn git_error_display() {
         assert_eq!(
-            GitError { detail: "oops".to_owned() }.to_string(),
+            GitError {
+                detail: "oops".to_owned()
+            }
+            .to_string(),
             "oops"
         );
     }
@@ -67,7 +70,10 @@ mod tests {
     #[test]
     fn editor_error_display() {
         assert_eq!(
-            EditorError { detail: "fail".to_owned() }.to_string(),
+            EditorError {
+                detail: "fail".to_owned()
+            }
+            .to_string(),
             "fail"
         );
     }
