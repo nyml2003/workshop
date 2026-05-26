@@ -2,7 +2,7 @@ use std::fs;
 
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
-use workc_domain::errors::DomainError;
+use workc_domain::errors::{DomainError, FieldKind};
 use workc_domain::repo_catalog::{RepoCatalog, RepoCatalogRepository, RepoEntry, RepoGroup};
 use workc_domain::shared::{RepoGroupId, RepoId};
 
@@ -170,23 +170,17 @@ impl RepoCatalogRepository for FsRepoCatalogRepository {
     }
 }
 
-fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {
-    move |error| DomainError::PersistenceFailed {
-        operation,
+fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError { move |error| DomainError::PersistenceFailed { operation: operation,
         detail: error.to_string(),
     }
 }
 
-fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError {
-    move |error| DomainError::InvalidInput {
-        field,
+fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }
 
-fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError {
-    move |error| DomainError::InvalidInput {
-        field,
+fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }

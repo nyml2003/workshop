@@ -7,6 +7,7 @@ use workc_application::skill_registry::{
     ApplicationSkillSourceKind, DefaultSkillRegistryApplicationService, ImportSkillSourceCommand,
     ImportedSkillDefinition, ShowSkillQuery, SkillRegistryApplicationService,
 };
+use workc_application::task::TaskSlug;
 use workc_application::task_skills::{
     CheckSkillUpdatesQuery, DefaultTaskSkillsApplicationService, MountSkillCommand,
     TaskSkillsApplicationService, UnmountSkillCommand,
@@ -181,11 +182,8 @@ pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
         }
         SkillCommand::Mounts(args) => {
             let service = task_skill_service()?;
-            if !args.task.starts_with("task-") {
-                return Err(anyhow!("skill mounts currently requires a task-id"));
-            }
             let mounts =
-                service.list_mounts(&workc_application::task::TaskId::from(args.task.as_str()))?;
+                service.list_mounts(&TaskSlug::from(args.task.as_str()))?;
             Ok(presenter.render_skill_mounts(&mounts))
         }
         SkillCommand::Unmount(args) => {

@@ -1,19 +1,27 @@
 use std::process::Command;
 
 use camino::Utf8Path;
-use workc_application::ports::{EditorError, EditorKind, EditorLauncher};
+use workc_application::ports::{EditorError, EditorLauncher};
+use workc_domain::editor::EditorRegistry;
 
-pub struct WindowsEditorLauncher;
+pub struct WindowsEditorLauncher {
+    registry: EditorRegistry,
+}
+
+impl WindowsEditorLauncher {
+    pub fn new() -> Self {
+        Self {
+            registry: EditorRegistry::new(),
+        }
+    }
+}
 
 impl EditorLauncher for WindowsEditorLauncher {
-    fn open_dir(&self, path: &Utf8Path, editor: EditorKind) -> Result<(), EditorError> {
-        let command = match &editor {
-            EditorKind::Cursor => resolve_windows_command("cursor")?,
-            EditorKind::VsCode => resolve_windows_command("code")?,
-            EditorKind::Other(value) => resolve_windows_command(value)?,
-        };
+    fn open_dir(&self, path: &Utf8Path, editor: &str) -> Result<(), EditorError> {
+        let cmd = self.registry.find(editor).map(|e| e.launch_cmd()).unwrap_or(editor);
+        let exe = resolve_windows_command(cmd)?;
 
-        Command::new(command)
+        Command::new(exe)
             .arg(path.as_str())
             .spawn()
             .map_err(|error| EditorError {
@@ -38,7 +46,7 @@ fn resolve_windows_command(name: &str) -> Result<String, EditorError> {
 
     if !output.status.success() {
         return Err(EditorError {
-            detail: "program not found".to_owned(),
+            detail: format!("program not found: {name}"),
         });
     }
 
@@ -59,7 +67,7 @@ fn resolve_windows_command(name: &str) -> Result<String, EditorError> {
     }
 
     candidates.pop().ok_or(EditorError {
-        detail: "program not found".to_owned(),
+        detail: format!("program not found: {name}"),
     })
 }
 

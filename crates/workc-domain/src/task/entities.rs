@@ -1,14 +1,14 @@
 use camino::Utf8PathBuf;
 
+use crate::errors::FieldKind;
 use crate::shared::{
-    MountId, RepoGroupId, RepoId, SkillId, SkillSourceId, SkillVersion, TaskId, TaskSlug, Timestamp,
+    MountId, RepoGroupId, RepoId, SkillId, SkillSourceId, SkillVersion, TaskSlug, Timestamp,
 };
 
 use super::value_objects::{TaskSkillMountStatus, TaskStatus};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TaskMeta {
-    pub id: TaskId,
     pub slug: TaskSlug,
     pub title: String,
     pub template: String,
@@ -54,7 +54,6 @@ pub struct TaskSkillMount {
 
 impl TaskMeta {
     pub fn new(
-        id: TaskId,
         slug: TaskSlug,
         title: String,
         template: String,
@@ -64,34 +63,33 @@ impl TaskMeta {
     ) -> Result<Self, crate::errors::DomainError> {
         if slug.as_str().trim().is_empty() {
             return Err(crate::errors::DomainError::InvalidInput {
-                field: "slug",
+                field: FieldKind::Slug,
                 reason: "slug cannot be empty".to_owned(),
             });
         }
 
         if title.trim().is_empty() {
             return Err(crate::errors::DomainError::InvalidInput {
-                field: "title",
+                field: FieldKind::Title,
                 reason: "title cannot be empty".to_owned(),
             });
         }
 
         if template.trim().is_empty() {
             return Err(crate::errors::DomainError::InvalidInput {
-                field: "template",
+                field: FieldKind::Template,
                 reason: "template cannot be empty".to_owned(),
             });
         }
 
         if tags.iter().any(|tag| tag.trim().is_empty()) {
             return Err(crate::errors::DomainError::InvalidInput {
-                field: "tags",
+                field: FieldKind::Tags,
                 reason: "tags cannot contain empty values".to_owned(),
             });
         }
 
         Ok(Self {
-            id,
             slug,
             title,
             template,
@@ -106,11 +104,10 @@ impl TaskMeta {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::DomainError;
+    use crate::errors::{DomainError, FieldKind};
 
     fn valid_meta() -> TaskMeta {
         TaskMeta::new(
-            TaskId::from("task-20260524-test"),
             TaskSlug::from("test-slug"),
             "Test Title".to_owned(),
             "default".to_owned(),
@@ -124,7 +121,6 @@ mod tests {
     #[test]
     fn creates_meta_with_valid_inputs() {
         let meta = valid_meta();
-        assert_eq!(meta.id.as_str(), "task-20260524-test");
         assert_eq!(meta.slug.as_str(), "test-slug");
         assert_eq!(meta.title, "Test Title");
         assert_eq!(meta.template, "default");
@@ -137,7 +133,6 @@ mod tests {
     #[test]
     fn rejects_empty_slug() {
         let result = TaskMeta::new(
-            TaskId::from("task-20260524-test"),
             TaskSlug::from(" "),
             "Title".to_owned(),
             "default".to_owned(),
@@ -145,13 +140,12 @@ mod tests {
             None,
             vec![],
         );
-        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "slug"));
+        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Slug));
     }
 
     #[test]
     fn rejects_empty_title() {
         let result = TaskMeta::new(
-            TaskId::from("task-20260524-test"),
             TaskSlug::from("slug"),
             "".to_owned(),
             "default".to_owned(),
@@ -159,13 +153,12 @@ mod tests {
             None,
             vec![],
         );
-        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "title"));
+        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Title));
     }
 
     #[test]
     fn rejects_whitespace_only_title() {
         let result = TaskMeta::new(
-            TaskId::from("task-20260524-test"),
             TaskSlug::from("slug"),
             "   ".to_owned(),
             "default".to_owned(),
@@ -173,13 +166,12 @@ mod tests {
             None,
             vec![],
         );
-        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "title"));
+        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Title));
     }
 
     #[test]
     fn rejects_empty_template() {
         let result = TaskMeta::new(
-            TaskId::from("task-20260524-test"),
             TaskSlug::from("slug"),
             "Title".to_owned(),
             "".to_owned(),
@@ -188,14 +180,13 @@ mod tests {
             vec![],
         );
         assert!(
-            matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "template")
+            matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Template)
         );
     }
 
     #[test]
     fn rejects_empty_tag_in_list() {
         let result = TaskMeta::new(
-            TaskId::from("task-20260524-test"),
             TaskSlug::from("slug"),
             "Title".to_owned(),
             "default".to_owned(),
@@ -203,13 +194,12 @@ mod tests {
             None,
             vec!["rust".to_owned(), "".to_owned(), "cli".to_owned()],
         );
-        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == "tags"));
+        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Tags));
     }
 
     #[test]
     fn accepts_empty_tags_vec() {
         let result = TaskMeta::new(
-            TaskId::from("task-20260524-test"),
             TaskSlug::from("slug"),
             "Title".to_owned(),
             "default".to_owned(),

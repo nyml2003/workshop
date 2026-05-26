@@ -3,10 +3,10 @@ use super::skill::SkillCommand;
 use anyhow::{Result, anyhow};
 use camino::Utf8PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use workc_application::ports::{Clock, EditorKind};
+use workc_application::ports::Clock;
 use workc_application::task::{
     ApplicationTaskStatus, CloseTaskCommand, CreateTaskCommand, DefaultTaskApplicationService,
-    ListTasksQuery, OpenTaskCommand, TaskApplicationService, TaskRef, TaskSlug,
+    ListTasksQuery, OpenTaskCommand, TaskApplicationService, TaskSlug,
 };
 use workc_application::task_skills::{MountSkillCommand, TaskSkillsApplicationService};
 use workc_domain::workspace::{WorkspaceEntry, WorkspaceRegistryRepository, WorkspaceStatus};
@@ -16,7 +16,7 @@ use workc_infrastructure::editor::windows::WindowsEditorLauncher;
 use workc_infrastructure::editor::macos::MacOsEditorLauncher;
 #[cfg(target_os = "linux")]
 use workc_infrastructure::editor::linux::LinuxEditorLauncher;
-use workc_infrastructure::fs::task_repository::{DefaultTaskIdGenerator, FsTaskRepository};
+use workc_infrastructure::fs::task_repository::FsTaskRepository;
 use workc_infrastructure::fs::{
     FsSkillRegistryRepository, FsTaskSkillMountRepository, FsWorkspaceRegistryRepository,
 };
@@ -140,7 +140,6 @@ fn task_service() -> Result<DefaultTaskApplicationService> {
         workspace_root.clone(),
         Box::new(FsTaskRepository::new(workspace_root)),
         Box::new(SystemClock),
-        Box::new(DefaultTaskIdGenerator),
         Box::new(default_editor_launcher()),
     ))
 }
@@ -150,7 +149,6 @@ fn task_service_for_root(root: Utf8PathBuf) -> Result<DefaultTaskApplicationServ
         root.clone(),
         Box::new(FsTaskRepository::new(root)),
         Box::new(SystemClock),
-        Box::new(DefaultTaskIdGenerator),
         Box::new(default_editor_launcher()),
     ))
 }
@@ -198,31 +196,24 @@ fn update_workspace_status(status: WorkspaceStatus) -> Result<()> {
 
 #[cfg(target_os = "windows")]
 fn default_editor_launcher() -> WindowsEditorLauncher {
-    WindowsEditorLauncher
+    WindowsEditorLauncher::new()
 }
 
 #[cfg(target_os = "macos")]
 fn default_editor_launcher() -> MacOsEditorLauncher {
-    MacOsEditorLauncher
+    MacOsEditorLauncher::new()
 }
 
 #[cfg(target_os = "linux")]
 fn default_editor_launcher() -> LinuxEditorLauncher {
-    LinuxEditorLauncher
+    LinuxEditorLauncher::new()
 }
 
-fn parse_task_ref(value: &str) -> TaskRef {
-    if value.starts_with("task-") {
-        TaskRef::Id(value.to_owned())
-    } else {
-        TaskRef::Slug(value.to_owned())
-    }
-}
 
-fn to_editor_kind(value: EditorArg) -> EditorKind {
+fn to_editor_name(value: EditorArg) -> &'static str {
     match value {
-        EditorArg::Cursor => EditorKind::Cursor,
-        EditorArg::Vscode => EditorKind::VsCode,
+        EditorArg::Cursor => "cursor",
+        EditorArg::Vscode => "vscode",
     }
 }
 
@@ -254,7 +245,7 @@ pub fn run() -> Result<String> {
             Ok(presenter.render_task_list(&items))
         }
         Command::Open(command) => {
-            let editor = command.editor.clone().map(to_editor_kind);
+            let editor = command.editor.clone().map(|e| to_editor_name(e).to_owned());
             let registry = workspace_registry();
             let entries = registry.load()?;
             let workspace_service = entries
@@ -265,7 +256,7 @@ pub fn run() -> Result<String> {
                 .ok_or_else(|| anyhow!("workspace not found: {}", command.task))?;
 
             workspace_service.open_task(OpenTaskCommand {
-                task: parse_task_ref(&command.task),
+                task: command.task.clone(),
                 editor,
             })?;
             let editor_name = command

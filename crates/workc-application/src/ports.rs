@@ -25,12 +25,8 @@ pub struct RepoStatus {
     pub clone_state: CloneState,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub enum EditorKind {
-    Cursor,
-    VsCode,
-    #[serde(untagged)]
-    Other(String),
+pub trait EditorLauncher {
+    fn open_dir(&self, path: &Utf8Path, editor: &str) -> Result<(), EditorError>;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -89,10 +85,6 @@ pub trait GitClient {
     fn get_repo_status(&self, path: &Utf8Path) -> Result<RepoStatus, GitError>;
     fn fetch_repo(&self, path: &Utf8Path) -> Result<(), GitError>;
     fn pull_repo(&self, path: &Utf8Path) -> Result<(), GitError>;
-}
-
-pub trait EditorLauncher {
-    fn open_dir(&self, path: &Utf8Path, editor: EditorKind) -> Result<(), EditorError>;
 }
 
 pub trait SkillRuntime {

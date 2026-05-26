@@ -237,7 +237,8 @@ pub fn render_skill_updates(items: &[SkillUpdateStatus]) -> String {
                 item.mount_id,
                 item.update_available,
                 item.target_version
-                    .clone()
+                    .as_ref()
+                    .map(|v| v.to_string())
                     .unwrap_or_else(|| "-".to_owned())
             )
         })

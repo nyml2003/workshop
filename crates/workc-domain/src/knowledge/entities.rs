@@ -1,6 +1,6 @@
 use camino::Utf8PathBuf;
 
-use crate::shared::{KnowledgeCandidateId, KnowledgeId, Timestamp};
+use crate::shared::{KnowledgeCandidateId, KnowledgeId, TaskSlug, Timestamp};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KnowledgeSourceRef {
@@ -25,7 +25,7 @@ pub struct KnowledgeEntry {
 pub struct KnowledgeCandidate {
     pub id: KnowledgeCandidateId,
     pub title: String,
-    pub task_id: crate::shared::TaskId,
+    pub task_slug: TaskSlug,
     pub path: Utf8PathBuf,
     pub category: Option<String>,
     pub tags: Vec<String>,

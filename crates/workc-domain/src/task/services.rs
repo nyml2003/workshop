@@ -1,6 +1,6 @@
 use crate::errors::DomainError;
 use crate::repo_catalog::entities::RepoGroup;
-use crate::shared::{RepoGroupId, RepoId, TaskId, TaskSlug, Timestamp};
+use crate::shared::{RepoGroupId, RepoId, Timestamp};
 
 use super::entities::TaskActivity;
 
@@ -26,10 +26,6 @@ pub enum TaskActivityEvent {
     SkillUnmounted,
     KnowledgePromoted,
     Closed,
-}
-
-pub trait TaskIdGenerator {
-    fn next_id(&self, now: Timestamp, slug_hint: &TaskSlug) -> Result<TaskId, DomainError>;
 }
 
 pub trait RepoSelectionResolver {

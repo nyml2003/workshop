@@ -1,6 +1,6 @@
 use super::entities::{TaskActivity, TaskMeta, TaskPaths, TaskRepoSelection};
-use crate::errors::DomainError;
-use crate::shared::{RepoGroupId, RepoId, TaskId, TaskSlug, Timestamp};
+use crate::errors::{DomainError, EntityKind};
+use crate::shared::{RepoGroupId, RepoId, TaskSlug, Timestamp};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TaskWorkspace {
@@ -13,7 +13,6 @@ pub struct TaskWorkspace {
 impl TaskWorkspace {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
-        id: TaskId,
         slug: TaskSlug,
         title: String,
         template: String,
@@ -25,7 +24,7 @@ impl TaskWorkspace {
         created_at: Timestamp,
     ) -> Result<Self, DomainError> {
         Ok(Self {
-            meta: TaskMeta::new(id, slug, title, template, description, source_brief, tags)?,
+            meta: TaskMeta::new(slug, title, template, description, source_brief, tags)?,
             repos: TaskRepoSelection {
                 selected_repo_groups,
                 repos,
@@ -57,13 +56,13 @@ impl TaskWorkspace {
         match self.meta.status {
             super::value_objects::TaskStatus::Closed => {
                 return Err(DomainError::Conflict {
-                    entity: "task",
+                    entity: EntityKind::Task,
                     reason: "already closed".to_owned(),
                 });
             }
             super::value_objects::TaskStatus::Archived => {
                 return Err(DomainError::Conflict {
-                    entity: "task",
+                    entity: EntityKind::Task,
                     reason: "archived tasks cannot be closed".to_owned(),
                 });
             }
@@ -81,12 +80,11 @@ mod tests {
     use time::OffsetDateTime;
 
     use super::*;
-    use crate::shared::{RepoGroupId, RepoId, TaskId, TaskSlug};
+    use crate::shared::{RepoGroupId, RepoId, TaskSlug};
     use crate::task::value_objects::TaskStatus;
 
     fn sample_task() -> TaskWorkspace {
         TaskWorkspace::create(
-            TaskId::from("task-20260524-test"),
             TaskSlug::from("test-slug"),
             "Test Title".to_owned(),
             "default".to_owned(),
@@ -126,7 +124,6 @@ mod tests {
     #[test]
     fn create_propagates_meta_validation_error() {
         let result = TaskWorkspace::create(
-            TaskId::from("task-20260524-test"),
             TaskSlug::from(""),
             "Title".to_owned(),
             "default".to_owned(),

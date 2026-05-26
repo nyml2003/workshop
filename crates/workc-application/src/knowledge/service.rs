@@ -1,7 +1,8 @@
 use crate::error::ApplicationError;
+use workc_domain::errors::EntityKind;
 use workc_domain::errors::DomainError;
 use workc_domain::knowledge::{KnowledgeEntry, KnowledgeRepository, KnowledgeSourceRef};
-use workc_domain::shared::{KnowledgeCandidateId, KnowledgeId, TaskId};
+use workc_domain::shared::{KnowledgeCandidateId, KnowledgeId, TaskSlug};
 
 use super::dtos::{
     CandidateMutationResult, CreateKnowledgeCandidateCommand, DeleteKnowledgeCandidateCommand,
@@ -97,7 +98,7 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
         let now = self.clock.now();
         let candidate = workc_domain::knowledge::KnowledgeCandidate {
             id: KnowledgeCandidateId::from(command.candidate_id.as_str()),
-            task_id: TaskId::from(command.task_id.as_str()),
+            task_slug: TaskSlug::from(command.task_id.as_str()),
             title: command.title,
             path: camino::Utf8PathBuf::from("tasks")
                 .join(command.task_id.as_str())
@@ -119,7 +120,7 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
         };
         self.repository.create_candidate(&candidate)?;
         Ok(CandidateMutationResult {
-            task_id: candidate.task_id.to_string(),
+            task_id: candidate.task_slug.to_string(),
             candidate: Self::to_summary_candidate(candidate),
         })
     }
@@ -130,7 +131,7 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
     ) -> Result<Vec<KnowledgeObjectSummary>, ApplicationError> {
         Ok(self
             .repository
-            .list_candidates(&TaskId::from(query.task_id.as_str()))?
+            .list_candidates(&TaskSlug::from(query.task_id.as_str()))?
             .into_iter()
             .map(Self::to_summary_candidate)
             .collect())
@@ -143,7 +144,7 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
         Ok(self
             .repository
             .find_candidate(
-                &TaskId::from(query.task_id.as_str()),
+                &TaskSlug::from(query.task_id.as_str()),
                 &KnowledgeCandidateId::from(query.candidate_id.as_str()),
             )?
             .map(Self::to_summary_candidate))
@@ -153,15 +154,15 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
         &self,
         command: UpdateKnowledgeCandidateMetaCommand,
     ) -> Result<CandidateMutationResult, ApplicationError> {
-        let task_id = TaskId::from(command.task_id.as_str());
+        let task_id = TaskSlug::from(command.task_id.as_str());
         let candidate_id = KnowledgeCandidateId::from(command.candidate_id.as_str());
         let mut candidate = self
             .repository
             .find_candidate(&task_id, &candidate_id)?
             .ok_or_else(|| {
                 ApplicationError::Domain(DomainError::NotFound {
-                    entity: "knowledge-candidate",
-                    id: candidate_id.to_string(),
+                    entity: EntityKind::KnowledgeCandidate,
+                    slug: candidate_id.to_string(),
                 })
             })?;
 
@@ -187,7 +188,7 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
         command: DeleteKnowledgeCandidateCommand,
     ) -> Result<(), ApplicationError> {
         self.repository.delete_candidate(
-            &TaskId::from(command.task_id.as_str()),
+            &TaskSlug::from(command.task_id.as_str()),
             &KnowledgeCandidateId::from(command.candidate_id.as_str()),
         )?;
         Ok(())
@@ -223,8 +224,8 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
         let knowledge_id = KnowledgeId::from(command.knowledge_id.as_str());
         let mut entry = self.repository.find_entry(&knowledge_id)?.ok_or_else(|| {
             ApplicationError::Domain(DomainError::NotFound {
-                entity: "knowledge",
-                id: knowledge_id.to_string(),
+                entity: EntityKind::Knowledge,
+                slug: knowledge_id.to_string(),
             })
         })?;
 
@@ -254,15 +255,15 @@ impl KnowledgeApplicationService for DefaultKnowledgeApplicationService {
         &self,
         command: PromoteKnowledgeCommand,
     ) -> Result<PromoteKnowledgeResult, ApplicationError> {
-        let task_id = TaskId::from(command.task_id.as_str());
+        let task_id = TaskSlug::from(command.task_id.as_str());
         let candidate_id = KnowledgeCandidateId::from(command.candidate_id.as_str());
         let knowledge_id = KnowledgeId::from(command.knowledge_id.as_str());
         self.repository
             .promote_candidate(&task_id, &candidate_id, &knowledge_id)?;
         let mut entry = self.repository.find_entry(&knowledge_id)?.ok_or_else(|| {
             ApplicationError::Domain(DomainError::NotFound {
-                entity: "knowledge",
-                id: knowledge_id.to_string(),
+                entity: EntityKind::Knowledge,
+                slug: knowledge_id.to_string(),
             })
         })?;
         if let Some(title) = command.title {
@@ -291,11 +292,12 @@ mod tests {
 
     use camino::Utf8PathBuf;
     use time::OffsetDateTime;
-    use workc_domain::errors::DomainError;
+    use workc_domain::errors::EntityKind;
+use workc_domain::errors::DomainError;
     use workc_domain::knowledge::{
         KnowledgeBase, KnowledgeCandidate, KnowledgeEntry, KnowledgeRepository,
     };
-    use workc_domain::shared::{KnowledgeCandidateId, KnowledgeId, TaskId};
+    use workc_domain::shared::{KnowledgeCandidateId, KnowledgeId, TaskSlug};
 
     use crate::ports::Clock;
 
@@ -327,9 +329,9 @@ mod tests {
 
         fn list_candidates(
             &self,
-            task_id: &TaskId,
+            slug: &TaskSlug,
         ) -> Result<Vec<KnowledgeCandidate>, DomainError> {
-            let prefix = task_id.to_string();
+            let prefix = slug.to_string();
             Ok(self
                 .candidates
                 .borrow()
@@ -341,7 +343,7 @@ mod tests {
 
         fn create_candidate(&self, candidate: &KnowledgeCandidate) -> Result<(), DomainError> {
             self.candidates.borrow_mut().insert(
-                (candidate.task_id.to_string(), candidate.id.to_string()),
+                (candidate.task_slug.to_string(), candidate.id.to_string()),
                 candidate.clone(),
             );
             Ok(())
@@ -349,11 +351,11 @@ mod tests {
 
         fn update_candidate(
             &self,
-            _task_id: &TaskId,
+            _slug: &TaskSlug,
             candidate: &KnowledgeCandidate,
         ) -> Result<(), DomainError> {
             self.candidates.borrow_mut().insert(
-                (candidate.task_id.to_string(), candidate.id.to_string()),
+                (candidate.task_slug.to_string(), candidate.id.to_string()),
                 candidate.clone(),
             );
             Ok(())
@@ -361,24 +363,24 @@ mod tests {
 
         fn delete_candidate(
             &self,
-            task_id: &TaskId,
+            slug: &TaskSlug,
             candidate_id: &KnowledgeCandidateId,
         ) -> Result<(), DomainError> {
             self.candidates
                 .borrow_mut()
-                .remove(&(task_id.to_string(), candidate_id.to_string()));
+                .remove(&(slug.to_string(), candidate_id.to_string()));
             Ok(())
         }
 
         fn find_candidate(
             &self,
-            task_id: &TaskId,
+            slug: &TaskSlug,
             candidate_id: &KnowledgeCandidateId,
         ) -> Result<Option<KnowledgeCandidate>, DomainError> {
             Ok(self
                 .candidates
                 .borrow()
-                .get(&(task_id.to_string(), candidate_id.to_string()))
+                .get(&(slug.to_string(), candidate_id.to_string()))
                 .cloned())
         }
 
@@ -402,14 +404,14 @@ mod tests {
 
         fn promote_candidate(
             &self,
-            task_id: &TaskId,
+            slug: &TaskSlug,
             candidate_id: &KnowledgeCandidateId,
             knowledge_id: &KnowledgeId,
         ) -> Result<(), DomainError> {
-            let candidate = self.find_candidate(task_id, candidate_id)?.ok_or_else(|| {
+            let candidate = self.find_candidate(slug, candidate_id)?.ok_or_else(|| {
                 DomainError::NotFound {
-                    entity: "knowledge-candidate",
-                    id: candidate_id.to_string(),
+                    entity: EntityKind::KnowledgeCandidate,
+                    slug: candidate_id.to_string(),
                 }
             })?;
             let entry = KnowledgeEntry {
@@ -457,7 +459,7 @@ mod tests {
         let svc = service();
         let result = svc
             .create_candidate(CreateKnowledgeCandidateCommand {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 candidate_id: "cand-01".to_owned(),
                 title: "Auth patterns".to_owned(),
                 category: Some("security".to_owned()),
@@ -466,7 +468,7 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(result.task_id, "task-20260524-auth");
+        assert_eq!(result.task_id, "auth-fix");
         assert_eq!(result.candidate.title, "Auth patterns");
         assert_eq!(result.candidate.source_count, 1);
         assert_eq!(result.candidate.category.as_deref(), Some("security"));
@@ -476,7 +478,7 @@ mod tests {
     fn list_candidates_returns_created_candidates() {
         let svc = service();
         svc.create_candidate(CreateKnowledgeCandidateCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             candidate_id: "cand-01".to_owned(),
             title: "Auth patterns".to_owned(),
             category: None,
@@ -487,7 +489,7 @@ mod tests {
 
         let items = svc
             .list_candidates(ListKnowledgeCandidatesQuery {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
             })
             .unwrap();
         assert_eq!(items.len(), 1);
@@ -521,7 +523,7 @@ mod tests {
     fn show_candidate_returns_summary() {
         let svc = service();
         svc.create_candidate(CreateKnowledgeCandidateCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             candidate_id: "cand-01".to_owned(),
             title: "Auth patterns".to_owned(),
             category: None,
@@ -532,7 +534,7 @@ mod tests {
 
         let item = svc
             .show_candidate(ShowKnowledgeCandidateQuery {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 candidate_id: "cand-01".to_owned(),
             })
             .unwrap()
@@ -544,7 +546,7 @@ mod tests {
     fn update_candidate_meta_changes_fields() {
         let svc = service();
         svc.create_candidate(CreateKnowledgeCandidateCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             candidate_id: "cand-01".to_owned(),
             title: "Old title".to_owned(),
             category: Some("old".to_owned()),
@@ -555,7 +557,7 @@ mod tests {
 
         let updated = svc
             .update_candidate_meta(UpdateKnowledgeCandidateMetaCommand {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 candidate_id: "cand-01".to_owned(),
                 title: Some("New title".to_owned()),
                 category: Some("new".to_owned()),
@@ -572,7 +574,7 @@ mod tests {
     fn update_candidate_meta_partial_updates_do_not_clear_other_fields() {
         let svc = service();
         svc.create_candidate(CreateKnowledgeCandidateCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             candidate_id: "cand-01".to_owned(),
             title: "Old title".to_owned(),
             category: Some("old".to_owned()),
@@ -583,7 +585,7 @@ mod tests {
 
         let updated = svc
             .update_candidate_meta(UpdateKnowledgeCandidateMetaCommand {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 candidate_id: "cand-01".to_owned(),
                 title: Some("New title".to_owned()),
                 category: None,
@@ -613,7 +615,7 @@ mod tests {
     fn delete_candidate_removes_it() {
         let svc = service();
         svc.create_candidate(CreateKnowledgeCandidateCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             candidate_id: "cand-01".to_owned(),
             title: "Auth patterns".to_owned(),
             category: None,
@@ -623,14 +625,14 @@ mod tests {
         .unwrap();
 
         svc.delete_candidate(DeleteKnowledgeCandidateCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             candidate_id: "cand-01".to_owned(),
         })
         .unwrap();
 
         let items = svc
             .list_candidates(ListKnowledgeCandidatesQuery {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
             })
             .unwrap();
         assert!(items.is_empty());
@@ -679,7 +681,7 @@ mod tests {
     fn promote_creates_entry_and_applies_overrides() {
         let svc = service();
         svc.create_candidate(CreateKnowledgeCandidateCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             candidate_id: "cand-01".to_owned(),
             title: "Auth patterns".to_owned(),
             category: Some("security".to_owned()),
@@ -690,7 +692,7 @@ mod tests {
 
         let result = svc
             .promote(PromoteKnowledgeCommand {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 candidate_id: "cand-01".to_owned(),
                 knowledge_id: "k-001".to_owned(),
                 title: Some("Promoted Auth".to_owned()),
@@ -699,7 +701,7 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(result.task_id, "task-20260524-auth");
+        assert_eq!(result.task_id, "auth-fix");
         assert_eq!(result.candidate_id, "cand-01");
         assert_eq!(result.knowledge.title, "Promoted Auth");
         assert_eq!(result.knowledge.source_count, 1);

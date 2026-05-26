@@ -9,6 +9,6 @@ pub use entities::{TaskActivity, TaskMeta, TaskPaths, TaskRepoSelection, TaskSki
 pub use repository::{TaskRepository, TaskSkillMountRepository};
 pub use services::{
     RepoSelectionInput, RepoSelectionResolver, ResolvedRepoSelection, TaskActivityEvent,
-    TaskActivityPolicy, TaskIdGenerator,
+    TaskActivityPolicy,
 };
 pub use value_objects::{TaskSkillMountStatus, TaskStatus};

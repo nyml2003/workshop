@@ -1,3 +1,4 @@
+use workc_domain::errors::EntityKind;
 use workc_domain::errors::DomainError;
 use workc_domain::repo_catalog::{RepoCatalogRepository, RepoEntry, RepoGroup};
 use workc_domain::shared::{RepoGroupId, RepoId};
@@ -38,8 +39,8 @@ impl RepoCatalogApplicationService for DefaultRepoCatalogApplicationService {
 
         if self.repository.find_repo(&repo_id)?.is_some() {
             return Err(ApplicationError::Domain(DomainError::AlreadyExists {
-                entity: "repo",
-                id: repo_id.to_string(),
+                entity: EntityKind::Repo,
+                slug: repo_id.to_string(),
             }));
         }
 
@@ -91,8 +92,8 @@ impl RepoCatalogApplicationService for DefaultRepoCatalogApplicationService {
         let mut catalog = self.repository.load()?;
         if catalog.groups.iter().any(|group| group.id == group_id) {
             return Err(ApplicationError::Domain(DomainError::AlreadyExists {
-                entity: "repo-group",
-                id: group_id.to_string(),
+                entity: EntityKind::RepoGroup,
+                slug: group_id.to_string(),
             }));
         }
 
@@ -104,8 +105,8 @@ impl RepoCatalogApplicationService for DefaultRepoCatalogApplicationService {
         for repo_id in &repo_ids {
             if !catalog.repos.iter().any(|repo| repo.id == *repo_id) {
                 return Err(ApplicationError::Domain(DomainError::NotFound {
-                    entity: "repo",
-                    id: repo_id.to_string(),
+                    entity: EntityKind::Repo,
+                    slug: repo_id.to_string(),
                 }));
             }
         }
@@ -237,7 +238,7 @@ mod tests {
         });
 
         assert!(
-            matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo")
+            matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == EntityKind::Repo)
         );
     }
 
@@ -262,7 +263,7 @@ mod tests {
             description: None,
         });
         assert!(
-            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "repo")
+            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == EntityKind::Repo)
         );
     }
 

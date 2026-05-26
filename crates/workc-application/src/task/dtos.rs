@@ -1,14 +1,18 @@
 use serde::Serialize;
 use workc_domain::shared::Timestamp;
 
-use crate::ports::EditorKind;
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum ApplicationTaskStatus {
     Draft,
     Active,
     Closed,
     Archived,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OpenTaskCommand {
+    pub task: String,
+    pub editor: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,7 +41,6 @@ pub struct CreateTaskCommand {
     pub tags: Vec<String>,
     pub selected_repo_groups: Vec<String>,
     pub repos: Vec<String>,
-    // skills are mounted by CLI layer after task creation, not consumed here
     pub initial_skills: Vec<String>,
 }
 
@@ -47,18 +50,6 @@ pub struct CreateTaskResult {
     pub slug: String,
     pub title: String,
     pub template: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TaskRef {
-    Id(String),
-    Slug(String),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct OpenTaskCommand {
-    pub task: TaskRef,
-    pub editor: Option<EditorKind>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

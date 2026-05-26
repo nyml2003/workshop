@@ -1,11 +1,11 @@
 use camino::Utf8PathBuf;
-use workc_domain::errors::DomainError;
-use workc_domain::shared::{RepoGroupId, RepoId, TaskId, TaskSlug};
-use workc_domain::task::{TaskIdGenerator, TaskRepository, TaskStatus, TaskWorkspace};
+use workc_domain::errors::{DomainError, EntityKind};
+use workc_domain::shared::{RepoGroupId, RepoId, TaskSlug};
+use workc_domain::task::{TaskRepository, TaskStatus, TaskWorkspace};
 
 use super::dtos::{
     ApplicationTaskStatus, CloseTaskCommand, CreateTaskCommand, CreateTaskResult, ListTasksQuery,
-    OpenTaskCommand, TaskListItem, TaskRef,
+    OpenTaskCommand, TaskListItem,
 };
 use crate::error::ApplicationError;
 use crate::ports::{Clock, EditorLauncher};
@@ -22,7 +22,6 @@ pub struct DefaultTaskApplicationService {
     workspace_root: Utf8PathBuf,
     tasks: Box<dyn TaskRepository>,
     clock: Box<dyn Clock>,
-    id_generator: Box<dyn TaskIdGenerator>,
     editor_launcher: Box<dyn EditorLauncher>,
 }
 
@@ -31,14 +30,12 @@ impl DefaultTaskApplicationService {
         workspace_root: Utf8PathBuf,
         tasks: Box<dyn TaskRepository>,
         clock: Box<dyn Clock>,
-        id_generator: Box<dyn TaskIdGenerator>,
         editor_launcher: Box<dyn EditorLauncher>,
     ) -> Self {
         Self {
             workspace_root,
             tasks,
             clock,
-            id_generator,
             editor_launcher,
         }
     }
@@ -47,19 +44,14 @@ impl DefaultTaskApplicationService {
         self.workspace_root.clone()
     }
 
-    fn load_task(&self, task_ref: &TaskRef) -> Result<TaskWorkspace, ApplicationError> {
-        let task = match task_ref {
-            TaskRef::Id(id) => self.tasks.find_by_id(&TaskId::from(id.as_str()))?,
-            TaskRef::Slug(slug) => self.tasks.find_by_slug(&TaskSlug::from(slug.as_str()))?,
-        };
+    fn load_task(&self, slug: &str) -> Result<TaskWorkspace, ApplicationError> {
+        let slug = TaskSlug::from(slug);
+        let task = self.tasks.find(&slug)?;
 
         task.ok_or_else(|| {
             ApplicationError::Domain(DomainError::NotFound {
-                entity: "task",
-                id: match task_ref {
-                    TaskRef::Id(id) => id.clone(),
-                    TaskRef::Slug(slug) => slug.clone(),
-                },
+                entity: EntityKind::Task,
+                slug: slug.to_string(),
             })
         })
     }
@@ -95,7 +87,7 @@ impl TaskApplicationService for DefaultTaskApplicationService {
             .into_iter()
             .take(limit)
             .map(|task| TaskListItem {
-                id: task.meta.id.to_string(),
+                id: task.meta.slug.to_string(),
                 slug: task.meta.slug.to_string(),
                 title: task.meta.title,
                 status: from_domain_status(task.meta.status),
@@ -108,20 +100,15 @@ impl TaskApplicationService for DefaultTaskApplicationService {
         &self,
         command: CreateTaskCommand,
     ) -> Result<CreateTaskResult, ApplicationError> {
-        let slug = TaskSlug::from(command.slug.as_str());
-
-        if self.tasks.find_by_slug(&slug)?.is_some() {
-            return Err(ApplicationError::Domain(DomainError::AlreadyExists {
-                entity: "task",
-                id: slug.to_string(),
-            }));
-        }
+        let slug = if command.slug.trim().is_empty() {
+            TaskSlug::generate()
+        } else {
+            TaskSlug::from(command.slug.as_str())
+        };
 
         let now = self.clock.now();
-        let task_id = self.id_generator.next_id(now, &slug)?;
         let task = TaskWorkspace::create(
-            task_id,
-            slug,
+            slug.clone(),
             command.title,
             command.template,
             command.description,
@@ -140,7 +127,7 @@ impl TaskApplicationService for DefaultTaskApplicationService {
         self.tasks.save(&task)?;
 
         Ok(CreateTaskResult {
-            task_id: task.meta.id.to_string(),
+            task_id: slug.to_string(),
             slug: task.meta.slug.to_string(),
             title: task.meta.title.clone(),
             template: task.meta.template.clone(),
@@ -148,19 +135,14 @@ impl TaskApplicationService for DefaultTaskApplicationService {
     }
 
     fn open_task(&self, command: OpenTaskCommand) -> Result<(), ApplicationError> {
-        let editor = command.editor.ok_or(ApplicationError::InvalidRequest(
+        let editor_name = command.editor.ok_or(ApplicationError::InvalidRequest(
             "missing --editor; default-editor lookup is deferred in this phase".to_owned(),
         ))?;
 
         let mut task = self.load_task(&command.task)?;
         let now = self.clock.now();
-        let editor_name = match &editor {
-            crate::ports::EditorKind::Cursor => "cursor".to_owned(),
-            crate::ports::EditorKind::VsCode => "vscode".to_owned(),
-            crate::ports::EditorKind::Other(name) => name.clone(),
-        };
         self.editor_launcher
-            .open_dir(self.task_root_path(&task).as_path(), editor.clone())
+            .open_dir(self.task_root_path(&task).as_path(), &editor_name)
             .map_err(|error| ApplicationError::ExternalFailure {
                 port: "editor",
                 detail: error.to_string(),
@@ -172,13 +154,14 @@ impl TaskApplicationService for DefaultTaskApplicationService {
     }
 
     fn close_task(&self, command: CloseTaskCommand) -> Result<(), ApplicationError> {
+        let slug = TaskSlug::from(command.task_id.as_str());
         let mut task = self
             .tasks
-            .find_by_id(&TaskId::from(command.task_id.as_str()))?
+            .find(&slug)?
             .ok_or_else(|| {
                 ApplicationError::Domain(DomainError::NotFound {
-                    entity: "task",
-                    id: command.task_id.clone(),
+                    entity: EntityKind::Task,
+                    slug: command.task_id.clone(),
                 })
             })?;
         task.close(self.clock.now())?;
@@ -213,10 +196,10 @@ mod tests {
 
     use camino::{Utf8Path, Utf8PathBuf};
     use time::OffsetDateTime;
-    use workc_domain::shared::{RepoId, TaskId, TaskSlug};
+    use workc_domain::shared::{RepoId, TaskSlug};
     use workc_domain::task::{TaskActivity, TaskMeta, TaskPaths, TaskRepoSelection, TaskStatus};
 
-    use crate::ports::{Clock, EditorError, EditorKind, EditorLauncher};
+    use crate::ports::{Clock, EditorError, EditorLauncher};
 
     use super::*;
 
@@ -226,19 +209,7 @@ mod tests {
     }
 
     impl TaskRepository for InMemoryTaskRepository {
-        fn find_by_id(
-            &self,
-            id: &workc_domain::shared::TaskId,
-        ) -> Result<Option<TaskWorkspace>, DomainError> {
-            Ok(self
-                .tasks
-                .borrow()
-                .values()
-                .find(|task| task.meta.id == *id)
-                .cloned())
-        }
-
-        fn find_by_slug(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
+        fn find(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
             Ok(self
                 .tasks
                 .borrow()
@@ -254,7 +225,7 @@ mod tests {
         fn save(&self, task: &TaskWorkspace) -> Result<(), DomainError> {
             self.tasks
                 .borrow_mut()
-                .insert(task.meta.id.to_string(), task.clone());
+                .insert(task.meta.slug.to_string(), task.clone());
             Ok(())
         }
     }
@@ -269,35 +240,16 @@ mod tests {
         }
     }
 
-    struct FixedTaskIdGenerator {
-        next: TaskId,
-    }
-
-    impl TaskIdGenerator for FixedTaskIdGenerator {
-        fn next_id(
-            &self,
-            _now: OffsetDateTime,
-            _slug_hint: &TaskSlug,
-        ) -> Result<TaskId, DomainError> {
-            Ok(self.next.clone())
-        }
-    }
-
     #[derive(Default)]
     struct RecordingEditorLauncher {
         calls: RefCell<Vec<(Utf8PathBuf, String)>>,
     }
 
     impl EditorLauncher for RecordingEditorLauncher {
-        fn open_dir(&self, path: &Utf8Path, editor: EditorKind) -> Result<(), EditorError> {
-            let editor_name = match editor {
-                EditorKind::Cursor => "cursor".to_owned(),
-                EditorKind::VsCode => "vscode".to_owned(),
-                EditorKind::Other(name) => name,
-            };
+        fn open_dir(&self, path: &Utf8Path, editor: &str) -> Result<(), EditorError> {
             self.calls
                 .borrow_mut()
-                .push((path.to_path_buf(), editor_name));
+                .push((path.to_path_buf(), editor.to_owned()));
             Ok(())
         }
     }
@@ -305,7 +257,7 @@ mod tests {
     struct FailingEditorLauncher;
 
     impl EditorLauncher for FailingEditorLauncher {
-        fn open_dir(&self, _path: &Utf8Path, _editor: EditorKind) -> Result<(), EditorError> {
+        fn open_dir(&self, _path: &Utf8Path, _editor: &str) -> Result<(), EditorError> {
             Err(EditorError {
                 detail: "editor unavailable".to_owned(),
             })
@@ -321,22 +273,17 @@ mod tests {
             Utf8PathBuf::from("/workspace"),
             Box::new(repo),
             Box::new(FixedClock { now }),
-            Box::new(FixedTaskIdGenerator {
-                next: TaskId::from("task-20260524-auth-session-fix"),
-            }),
             Box::new(launcher),
         )
     }
 
     fn sample_task(
-        id: &str,
         slug: &str,
         title: &str,
         last_activity_at: Option<OffsetDateTime>,
     ) -> TaskWorkspace {
         TaskWorkspace {
             meta: TaskMeta {
-                id: TaskId::from(id),
                 slug: TaskSlug::from(slug),
                 title: title.to_owned(),
                 template: "default".to_owned(),
@@ -393,14 +340,12 @@ mod tests {
     fn list_tasks_sorts_by_last_activity_desc() {
         let repo = InMemoryTaskRepository::default();
         repo.save(&sample_task(
-            "task-older",
             "older",
             "Older task",
             Some(OffsetDateTime::UNIX_EPOCH),
         ))
         .unwrap();
         repo.save(&sample_task(
-            "task-newer",
             "newer",
             "Newer task",
             Some(OffsetDateTime::UNIX_EPOCH + time::Duration::hours(1)),
@@ -425,7 +370,6 @@ mod tests {
     fn open_task_requires_editor_in_this_phase() {
         let repo = InMemoryTaskRepository::default();
         repo.save(&sample_task(
-            "task-20260524-auth-session-fix",
             "auth-session-fix",
             "Fix session renewal",
             None,
@@ -434,7 +378,7 @@ mod tests {
         let service = service(repo, RecordingEditorLauncher::default());
 
         let result = service.open_task(OpenTaskCommand {
-            task: TaskRef::Slug("auth-session-fix".to_owned()),
+            task: "auth-session-fix".to_owned(),
             editor: None,
         });
 
@@ -447,7 +391,6 @@ mod tests {
     fn open_task_does_not_persist_opened_state_when_launcher_fails() {
         let repo = InMemoryTaskRepository::default();
         repo.save(&sample_task(
-            "task-20260524-auth-session-fix",
             "auth-session-fix",
             "Fix session renewal",
             None,
@@ -459,15 +402,12 @@ mod tests {
             Box::new(FixedClock {
                 now: OffsetDateTime::UNIX_EPOCH + time::Duration::hours(2),
             }),
-            Box::new(FixedTaskIdGenerator {
-                next: TaskId::from("task-20260524-auth-session-fix"),
-            }),
             Box::new(FailingEditorLauncher),
         );
 
         let result = service.open_task(OpenTaskCommand {
-            task: TaskRef::Slug("auth-session-fix".to_owned()),
-            editor: Some(EditorKind::Cursor),
+            task: "auth-session-fix".to_owned(),
+            editor: Some("cursor".to_owned()),
         });
 
         assert!(
@@ -476,7 +416,7 @@ mod tests {
 
         let stored = service
             .tasks
-            .find_by_slug(&TaskSlug::from("auth-session-fix"))
+            .find(&TaskSlug::from("auth-session-fix"))
             .unwrap()
             .unwrap();
         assert_eq!(stored.activity.last_opened_at, None);
@@ -487,7 +427,6 @@ mod tests {
     fn close_task_sets_status_to_closed() {
         let repo = InMemoryTaskRepository::default();
         repo.save(&sample_task(
-            "task-20260524-auth-session-fix",
             "auth-session-fix",
             "Fix session renewal",
             None,
@@ -497,13 +436,13 @@ mod tests {
 
         service
             .close_task(CloseTaskCommand {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
             })
             .unwrap();
 
         let stored = service
             .tasks
-            .find_by_id(&TaskId::from("task-20260524-auth-session-fix"))
+            .find(&TaskSlug::from("auth-session-fix"))
             .unwrap()
             .unwrap();
         assert_eq!(stored.meta.status, TaskStatus::Closed);
@@ -515,45 +454,39 @@ mod tests {
         let service = service(repo, RecordingEditorLauncher::default());
 
         let result = service.close_task(CloseTaskCommand {
-            task_id: "task-missing".to_owned(),
+            task_id: "missing".to_owned(),
         });
         assert!(result.is_err());
     }
 
     #[test]
-    fn create_task_rejects_duplicate_slug() {
-        let repo = InMemoryTaskRepository::default();
-        repo.save(&sample_task(
-            "task-20260524-auth-session-fix",
-            "auth-session-fix",
-            "Fix session renewal",
-            None,
-        ))
-        .unwrap();
-        let service = service(repo, RecordingEditorLauncher::default());
-
-        let result = service.create_task(CreateTaskCommand {
-            slug: "auth-session-fix".to_owned(),
-            title: "Duplicate".to_owned(),
-            template: "default".to_owned(),
-            description: None,
-            source_brief: None,
-            tags: vec![],
-            selected_repo_groups: vec![],
-            repos: vec![],
-            initial_skills: vec![],
-        });
-        assert!(
-            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "task")
+    fn create_task_generates_slug_when_empty() {
+        let service = service(
+            InMemoryTaskRepository::default(),
+            RecordingEditorLauncher::default(),
         );
+        let result = service
+            .create_task(CreateTaskCommand {
+                slug: String::new(),
+                title: "Title".to_owned(),
+                template: "default".to_owned(),
+                description: None,
+                source_brief: None,
+                tags: vec![],
+                selected_repo_groups: vec![],
+                repos: vec![],
+                initial_skills: vec![],
+            })
+            .unwrap();
+        assert_eq!(result.slug.len(), 8);
     }
 
     #[test]
     fn list_tasks_respects_limit() {
         let repo = InMemoryTaskRepository::default();
-        repo.save(&sample_task("task-a", "a", "A", None)).unwrap();
-        repo.save(&sample_task("task-b", "b", "B", None)).unwrap();
-        repo.save(&sample_task("task-c", "c", "C", None)).unwrap();
+        repo.save(&sample_task("a", "A", None)).unwrap();
+        repo.save(&sample_task("b", "B", None)).unwrap();
+        repo.save(&sample_task("c", "C", None)).unwrap();
         let service = service(repo, RecordingEditorLauncher::default());
 
         let items = service
@@ -584,11 +517,11 @@ mod tests {
     }
 
     #[test]
-    fn load_task_by_id_returns_error_for_missing() {
+    fn load_task_returns_error_for_missing() {
         let repo = InMemoryTaskRepository::default();
         let service = service(repo, RecordingEditorLauncher::default());
 
-        let result = service.load_task(&TaskRef::Id("task-missing".to_owned()));
+        let result = service.load_task("missing");
         assert!(result.is_err());
     }
 
@@ -596,7 +529,6 @@ mod tests {
     fn open_task_launches_editor_at_workspace_root() {
         let repo = InMemoryTaskRepository::default();
         repo.save(&sample_task(
-            "task-20260524-auth-session-fix",
             "auth-session-fix",
             "Fix session renewal",
             None,
@@ -607,11 +539,11 @@ mod tests {
 
         struct Capture(Rc<RefCell<Vec<(Utf8PathBuf, String)>>>);
         impl EditorLauncher for Capture {
-            fn open_dir(&self, path: &Utf8Path, editor: EditorKind) -> Result<(), EditorError> {
+            fn open_dir(&self, path: &Utf8Path, editor: &str) -> Result<(), EditorError> {
                 let name = match editor {
-                    EditorKind::Cursor => "cursor",
-                    EditorKind::VsCode => "vscode",
-                    EditorKind::Other(_) => "other",
+                    "cursor" => "cursor",
+                    "vscode" => "vscode",
+                    _ => "other",
                 };
                 self.0.borrow_mut().push((path.to_path_buf(), name.to_owned()));
                 Ok(())
@@ -622,13 +554,12 @@ mod tests {
             Utf8PathBuf::from("/workspace"),
             Box::new(repo),
             Box::new(FixedClock { now: OffsetDateTime::UNIX_EPOCH }),
-            Box::new(FixedTaskIdGenerator { next: TaskId::from("task-20260524-auth-session-fix") }),
             Box::new(Capture(calls)),
         );
 
         svc.open_task(OpenTaskCommand {
-            task: TaskRef::Slug("auth-session-fix".to_owned()),
-            editor: Some(EditorKind::Cursor),
+            task: "auth-session-fix".to_owned(),
+            editor: Some("cursor".to_owned()),
         })
         .unwrap();
 

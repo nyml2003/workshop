@@ -39,11 +39,24 @@ pub struct UseStep {
     pub action_id: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+use std::fmt::Display;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SkillExecutionStatus {
     Pending,
     Success,
     Failed,
+}
+
+impl Display for SkillExecutionStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Pending => write!(f, "pending"),
+            Self::Success => write!(f, "success"),
+            Self::Failed => write!(f, "failed"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

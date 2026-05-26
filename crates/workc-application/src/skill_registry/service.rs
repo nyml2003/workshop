@@ -1,3 +1,4 @@
+use workc_domain::errors::EntityKind;
 use workc_domain::errors::DomainError;
 use workc_domain::shared::{SkillId, SkillSourceId, SkillVersion};
 use workc_domain::skill_registry::{
@@ -46,8 +47,8 @@ impl SkillRegistryApplicationService for DefaultSkillRegistryApplicationService 
 
         if registry.sources.iter().any(|source| source.id == source_id) {
             return Err(ApplicationError::Domain(DomainError::AlreadyExists {
-                entity: "skill-source",
-                id: source_id.to_string(),
+                entity: EntityKind::Skill,
+                slug: source_id.to_string(),
             }));
         }
 
@@ -67,8 +68,8 @@ impl SkillRegistryApplicationService for DefaultSkillRegistryApplicationService 
                 .any(|existing| existing.id == skill_id)
             {
                 return Err(ApplicationError::Domain(DomainError::AlreadyExists {
-                    entity: "skill",
-                    id: skill_id.to_string(),
+                    entity: EntityKind::Skill,
+                    slug: skill_id.to_string(),
                 }));
             }
 
@@ -238,7 +239,7 @@ mod tests {
             skills: vec![],
         });
         assert!(
-            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "skill-source")
+            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == EntityKind::Skill)
         );
     }
 
@@ -274,7 +275,7 @@ mod tests {
             }],
         });
         assert!(
-            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == "skill")
+            matches!(result, Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == EntityKind::Skill)
         );
     }
 

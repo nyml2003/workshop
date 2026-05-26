@@ -1,9 +1,10 @@
 use std::collections::BTreeSet;
 
 use camino::Utf8PathBuf;
+use workc_domain::errors::EntityKind;
 use workc_domain::errors::DomainError;
 use workc_domain::repo_catalog::RepoCatalogRepository;
-use workc_domain::shared::{RepoGroupId, RepoId, TaskId, TaskSlug};
+use workc_domain::shared::{RepoGroupId, RepoId, TaskSlug};
 use workc_domain::task::TaskRepository;
 
 use crate::error::ApplicationError;
@@ -63,16 +64,13 @@ impl DefaultTaskReposApplicationService {
         &self,
         task_ref: &str,
     ) -> Result<workc_domain::task::TaskWorkspace, ApplicationError> {
-        let task = if task_ref.starts_with("task-") {
-            self.tasks.find_by_id(&TaskId::from(task_ref))?
-        } else {
-            self.tasks.find_by_slug(&TaskSlug::from(task_ref))?
-        };
+        let slug = TaskSlug::from(task_ref);
+        let task = self.tasks.find(&slug)?;
 
         task.ok_or_else(|| {
             ApplicationError::Domain(DomainError::NotFound {
-                entity: "task",
-                id: task_ref.to_owned(),
+                entity: EntityKind::Task,
+                slug: task_ref.to_owned(),
             })
         })
     }
@@ -82,8 +80,8 @@ impl DefaultTaskReposApplicationService {
         for repo_id in repo_ids {
             if !catalog.repos.iter().any(|repo| repo.id == *repo_id) {
                 return Err(ApplicationError::Domain(DomainError::NotFound {
-                    entity: "repo",
-                    id: repo_id.to_string(),
+                    entity: EntityKind::Repo,
+                    slug: repo_id.to_string(),
                 }));
             }
         }
@@ -103,8 +101,8 @@ impl DefaultTaskReposApplicationService {
                 .find(|group| group.id == *group_id)
                 .ok_or_else(|| {
                     ApplicationError::Domain(DomainError::NotFound {
-                        entity: "repo-group",
-                        id: group_id.to_string(),
+                        entity: EntityKind::RepoGroup,
+                        slug: group_id.to_string(),
                     })
                 })?;
             repos.extend(group.repos.clone());
@@ -126,7 +124,7 @@ impl DefaultTaskReposApplicationService {
         self.tasks.save(&task)?;
 
         Ok(TaskReposResult {
-            task_id: task.meta.id.to_string(),
+            task_id: task.meta.slug.to_string(),
             selected_repo_groups: task
                 .repos
                 .selected_repo_groups
@@ -167,8 +165,8 @@ impl DefaultTaskReposApplicationService {
                 .find(|entry| entry.id == *repo_id)
                 .ok_or_else(|| {
                     ApplicationError::Domain(DomainError::NotFound {
-                        entity: "repo",
-                        id: repo_id.to_string(),
+                        entity: EntityKind::Repo,
+                        slug: repo_id.to_string(),
                     })
                 })?;
             let path = Self::task_repo_path(task, repo_id);
@@ -381,7 +379,7 @@ mod tests {
 
     use time::OffsetDateTime;
     use workc_domain::repo_catalog::{RepoCatalog, RepoCatalogRepository, RepoEntry, RepoGroup};
-    use workc_domain::shared::{RepoId, TaskId, TaskSlug};
+    use workc_domain::shared::{RepoId, TaskSlug};
     use workc_domain::task::{
         TaskActivity, TaskMeta, TaskPaths, TaskRepoSelection, TaskRepository, TaskStatus,
         TaskWorkspace,
@@ -397,16 +395,9 @@ mod tests {
     }
 
     impl TaskRepository for InMemoryTaskRepository {
-        fn find_by_id(&self, id: &TaskId) -> Result<Option<TaskWorkspace>, DomainError> {
-            Ok(self
-                .tasks
-                .borrow()
-                .values()
-                .find(|task| task.meta.id == *id)
-                .cloned())
-        }
+        
 
-        fn find_by_slug(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
+        fn find(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
             Ok(self
                 .tasks
                 .borrow()
@@ -422,7 +413,7 @@ mod tests {
         fn save(&self, task: &TaskWorkspace) -> Result<(), DomainError> {
             self.tasks
                 .borrow_mut()
-                .insert(task.meta.id.to_string(), task.clone());
+                .insert(task.meta.slug.to_string(), task.clone());
             Ok(())
         }
     }
@@ -475,7 +466,6 @@ mod tests {
     fn sample_task() -> TaskWorkspace {
         TaskWorkspace {
             meta: TaskMeta {
-                id: TaskId::from("task-20260524-auth-session-fix"),
                 slug: TaskSlug::from("auth-session-fix"),
                 title: "Fix session renewal".to_owned(),
                 template: "default".to_owned(),
@@ -579,7 +569,7 @@ mod tests {
 
         let result = service
             .set_task_repos(SetTaskReposCommand {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
                 selected_repo_groups: vec!["auth-core".to_owned()],
                 repos: vec!["api-gateway".to_owned()],
             })
@@ -605,12 +595,12 @@ mod tests {
         );
 
         let result = service.add_task_repos(AddTaskReposCommand {
-            task_id: "task-20260524-auth-session-fix".to_owned(),
+            task_id: "auth-session-fix".to_owned(),
             repos: vec!["unknown-repo".to_owned()],
         });
 
         assert!(
-            matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo")
+            matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == EntityKind::Repo)
         );
     }
 
@@ -633,7 +623,7 @@ mod tests {
 
         let result = service
             .clone_task_repos(CloneTaskReposCommand {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
                 repos: None,
                 missing_only: false,
                 dry_run: true,
@@ -663,7 +653,7 @@ mod tests {
 
         let result = service
             .get_repo_statuses(RepoStatusQuery {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
                 repos: None,
                 clone_state: Some(CloneStateFilter::Missing),
                 dry_run: true,
@@ -693,7 +683,7 @@ mod tests {
 
         let result = service
             .remove_task_repos(RemoveTaskReposCommand {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
                 repos: vec!["api-gateway".to_owned()],
             })
             .unwrap();
@@ -721,7 +711,7 @@ mod tests {
 
         let result = service
             .clone_task_repos(CloneTaskReposCommand {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
                 repos: None,
                 missing_only: false,
                 dry_run: false,
@@ -752,7 +742,7 @@ mod tests {
 
         let result = service
             .get_repo_statuses(RepoStatusQuery {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
                 repos: None,
                 clone_state: None,
                 dry_run: false,
@@ -783,7 +773,7 @@ mod tests {
 
         let result = service
             .get_repo_statuses(RepoStatusQuery {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
                 repos: None,
                 clone_state: Some(CloneStateFilter::Dirty),
                 dry_run: false,
@@ -813,7 +803,7 @@ mod tests {
 
         let result = service
             .set_task_repos(SetTaskReposCommand {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
                 selected_repo_groups: vec!["auth-core".to_owned()],
                 repos: vec![],
             })
@@ -841,7 +831,7 @@ mod tests {
 
         let result = service
             .clone_task_repos(CloneTaskReposCommand {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
                 repos: None,
                 missing_only: true,
                 dry_run: false,
@@ -894,7 +884,7 @@ mod tests {
 
         let result = service
             .get_repo_statuses(RepoStatusQuery {
-                task_id: "task-20260524-auth-session-fix".to_owned(),
+                task_id: "auth-session-fix".to_owned(),
                 repos: None,
                 clone_state: Some(CloneStateFilter::Ready),
                 dry_run: false,
@@ -921,12 +911,12 @@ mod tests {
         );
 
         let result = service.set_task_repos(SetTaskReposCommand {
-            task_id: "task-20260524-auth-session-fix".to_owned(),
+            task_id: "auth-session-fix".to_owned(),
             selected_repo_groups: vec!["nonexistent".to_owned()],
             repos: vec![],
         });
         assert!(
-            matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == "repo-group")
+            matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == EntityKind::RepoGroup)
         );
     }
 }

@@ -3,8 +3,9 @@ use std::fs;
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
+use workc_domain::errors::FieldKind;
 use workc_domain::errors::DomainError;
-use workc_domain::shared::{MountId, SkillId, SkillSourceId, SkillVersion, TaskId, Timestamp};
+use workc_domain::shared::{MountId, SkillId, SkillSourceId, SkillVersion, TaskSlug, Timestamp};
 use workc_domain::task::{TaskSkillMount, TaskSkillMountRepository, TaskSkillMountStatus};
 
 pub struct FsTaskSkillMountRepository {
@@ -33,7 +34,7 @@ impl FsTaskSkillMountRepository {
         Self { project_root }
     }
 
-    fn mounts_path(&self, _task_id: &TaskId) -> Utf8PathBuf {
+    fn mounts_path(&self, _slug: &TaskSlug) -> Utf8PathBuf {
         self.project_root.join("skills").join("mounts.toml")
     }
 
@@ -41,22 +42,22 @@ impl FsTaskSkillMountRepository {
         value
             .format(&Rfc3339)
             .map_err(|error| DomainError::InvalidInput {
-                field: "timestamp",
+                field: FieldKind::Timestamp,
                 reason: error.to_string(),
             })
     }
 
     fn parse_timestamp(value: &str) -> Result<Timestamp, DomainError> {
         Timestamp::parse(value, &Rfc3339).map_err(|error| DomainError::InvalidInput {
-            field: "timestamp",
+            field: FieldKind::Timestamp,
             reason: error.to_string(),
         })
     }
 }
 
 impl TaskSkillMountRepository for FsTaskSkillMountRepository {
-    fn list_for_task(&self, task_id: &TaskId) -> Result<Vec<TaskSkillMount>, DomainError> {
-        let path = self.mounts_path(task_id);
+    fn list_for_task(&self, slug: &TaskSlug) -> Result<Vec<TaskSkillMount>, DomainError> {
+        let path = self.mounts_path(slug);
         if !path.exists() {
             return Ok(Vec::new());
         }
@@ -80,7 +81,7 @@ impl TaskSkillMountRepository for FsTaskSkillMountRepository {
                         "removed" => TaskSkillMountStatus::Removed,
                         other => {
                             return Err(DomainError::InvalidInput {
-                                field: "mount status",
+                                field: FieldKind::Other("mount status"),
                                 reason: format!("unknown mount status: {other}"),
                             });
                         }
@@ -93,12 +94,12 @@ impl TaskSkillMountRepository for FsTaskSkillMountRepository {
 
     fn save_for_task(
         &self,
-        task_id: &TaskId,
+        slug: &TaskSlug,
         mounts: &[TaskSkillMount],
     ) -> Result<(), DomainError> {
-        let path = self.mounts_path(task_id);
+        let path = self.mounts_path(slug);
         let parent = path.parent().ok_or(DomainError::InvalidInput {
-            field: "mount path",
+            field: FieldKind::Other("mount path"),
             reason: "missing parent directory".to_owned(),
         })?;
         fs::create_dir_all(parent).map_err(io_error("create skill mounts dir"))?;
@@ -129,30 +130,24 @@ impl TaskSkillMountRepository for FsTaskSkillMountRepository {
         Ok(())
     }
 
-    fn remove_for_task(&self, task_id: &TaskId, mount_id: &MountId) -> Result<(), DomainError> {
-        let mut mounts = self.list_for_task(task_id)?;
+    fn remove_for_task(&self, slug: &TaskSlug, mount_id: &MountId) -> Result<(), DomainError> {
+        let mut mounts = self.list_for_task(slug)?;
         mounts.retain(|mount| mount.id != *mount_id);
-        self.save_for_task(task_id, &mounts)
+        self.save_for_task(slug, &mounts)
     }
 }
 
-fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {
-    move |error| DomainError::PersistenceFailed {
-        operation,
+fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError { move |error| DomainError::PersistenceFailed { operation: operation,
         detail: error.to_string(),
     }
 }
 
-fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError {
-    move |error| DomainError::InvalidInput {
-        field,
+fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }
 
-fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError {
-    move |error| DomainError::InvalidInput {
-        field,
+fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }

@@ -1,5 +1,8 @@
 use camino::Utf8PathBuf;
 use serde::Serialize;
+use workc_domain::shared::SkillVersion;
+use workc_domain::skill_registry::SkillExecutionStatus;
+use workc_domain::task::TaskSkillMountStatus;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MountSkillCommand {
@@ -15,7 +18,7 @@ pub struct SkillMountSummary {
     pub skill_id: String,
     pub version: String,
     pub source: String,
-    pub status: String,
+    pub status: TaskSkillMountStatus,
     pub path: Utf8PathBuf,
 }
 
@@ -74,7 +77,7 @@ pub struct PrepareStatusQuery {
 pub struct SkillUpdateStatus {
     pub mount_id: String,
     pub update_available: bool,
-    pub target_version: Option<String>,
+    pub target_version: Option<SkillVersion>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,7 +89,7 @@ pub struct SkillSandboxHandle {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SkillPreparation {
     pub mount_id: String,
-    pub status: String,
+    pub status: SkillExecutionStatus,
     pub artifact_path: Option<Utf8PathBuf>,
     pub log_path: Option<Utf8PathBuf>,
 }
@@ -94,7 +97,7 @@ pub struct SkillPreparation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SkillUseExecution {
     pub mount_id: String,
-    pub status: String,
+    pub status: SkillExecutionStatus,
     pub log_path: Option<Utf8PathBuf>,
 }
 

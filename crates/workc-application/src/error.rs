@@ -42,15 +42,15 @@ impl From<DomainError> for ApplicationError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use workc_domain::errors::DomainError;
+    use workc_domain::errors::{DomainError, EntityKind};
 
     #[test]
     fn domain_error_display_passthrough() {
         let err = ApplicationError::Domain(DomainError::NotFound {
-            entity: "repo",
-            id: "x".to_owned(),
+            entity: EntityKind::Repo,
+            slug: "x".to_owned(),
         });
-        assert_eq!(err.to_string(), "repo not found: x");
+        assert_eq!(err.to_string(), "Repo not found: x");
     }
 
     #[test]
@@ -77,8 +77,8 @@ mod tests {
     #[test]
     fn domain_error_is_source() {
         let domain = DomainError::NotFound {
-            entity: "task",
-            id: "t1".to_owned(),
+            entity: EntityKind::Task,
+            slug: "t1".to_owned(),
         };
         let app_err = ApplicationError::Domain(domain.clone());
         let source = app_err.source();
@@ -95,7 +95,7 @@ mod tests {
     #[test]
     fn from_domain_error_conversion() {
         let domain = DomainError::Conflict {
-            entity: "task",
+            entity: EntityKind::Task,
             reason: "locked".to_owned(),
         };
         let app_err: ApplicationError = domain.into();

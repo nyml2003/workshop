@@ -1,19 +1,26 @@
 use std::process::Command;
 
 use camino::Utf8Path;
-use workc_application::ports::{EditorError, EditorKind, EditorLauncher};
+use workc_application::ports::{EditorError, EditorLauncher};
+use workc_domain::editor::EditorRegistry;
 
-pub struct MacOsEditorLauncher;
+pub struct MacOsEditorLauncher {
+    registry: EditorRegistry,
+}
+
+impl MacOsEditorLauncher {
+    pub fn new() -> Self {
+        Self {
+            registry: EditorRegistry::new(),
+        }
+    }
+}
 
 impl EditorLauncher for MacOsEditorLauncher {
-    fn open_dir(&self, path: &Utf8Path, editor: EditorKind) -> Result<(), EditorError> {
-        let command = match editor {
-            EditorKind::Cursor => "cursor",
-            EditorKind::VsCode => "code",
-            EditorKind::Other(ref value) => value.as_str(),
-        };
+    fn open_dir(&self, path: &Utf8Path, editor: &str) -> Result<(), EditorError> {
+        let cmd = self.registry.find(editor).map(|e| e.launch_cmd()).unwrap_or(editor);
 
-        Command::new(command)
+        Command::new(cmd)
             .arg(path.as_str())
             .spawn()
             .map_err(|error| EditorError {

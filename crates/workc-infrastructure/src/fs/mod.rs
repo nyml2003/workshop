@@ -12,6 +12,6 @@ pub mod workspace_repository;
 pub use config_repository::FsConfigRepository;
 pub use repo_catalog_repository::FsRepoCatalogRepository;
 pub use skill_registry_repository::FsSkillRegistryRepository;
-pub use task_repository::{DefaultTaskIdGenerator, FsTaskRepository};
+pub use task_repository::FsTaskRepository;
 pub use task_skill_mount_repository::FsTaskSkillMountRepository;
 pub use workspace_repository::FsWorkspaceRegistryRepository;

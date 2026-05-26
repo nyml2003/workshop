@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use workc_domain::config::{ConfigRepository, WorkcConfig};
+use workc_domain::errors::FieldKind;
 use workc_domain::errors::DomainError;
 
 use super::paths;
@@ -46,7 +47,7 @@ impl ConfigRepository for FsConfigRepository {
     fn save(&self, config: &WorkcConfig) -> Result<(), DomainError> {
         let path = paths::workc_config_path();
         let parent = path.parent().ok_or(DomainError::InvalidInput {
-            field: "config path",
+            field: FieldKind::Other("config path"),
             reason: "no parent directory".to_owned(),
         })?;
         fs::create_dir_all(parent).map_err(io_error("create workc home"))?;
@@ -64,23 +65,17 @@ impl ConfigRepository for FsConfigRepository {
     }
 }
 
-fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {
-    move |error| DomainError::PersistenceFailed {
-        operation,
+fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError { move |error| DomainError::PersistenceFailed { operation: operation,
         detail: error.to_string(),
     }
 }
 
-fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError {
-    move |error| DomainError::InvalidInput {
-        field,
+fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }
 
-fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError {
-    move |error| DomainError::InvalidInput {
-        field,
+fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }

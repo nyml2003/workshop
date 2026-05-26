@@ -1,8 +1,9 @@
 use std::collections::BTreeSet;
 
 use camino::Utf8PathBuf;
-use workc_domain::errors::DomainError;
-use workc_domain::shared::{MountId, SkillId, SkillVersion, TaskId};
+
+use workc_domain::errors::{DomainError, EntityKind};
+use workc_domain::shared::{MountId, SkillId, SkillVersion, TaskSlug};
 use workc_domain::skill_registry::SkillRegistryRepository;
 use workc_domain::task::{
     TaskRepository, TaskSkillMount, TaskSkillMountRepository, TaskSkillMountStatus,
@@ -25,7 +26,7 @@ pub trait TaskSkillsApplicationService {
     ) -> Result<SkillMountSummary, ApplicationError>;
     fn list_mounts(
         &self,
-        task_id: &workc_domain::shared::TaskId,
+        task_id: &workc_domain::shared::TaskSlug,
     ) -> Result<Vec<SkillMountSummary>, ApplicationError>;
     fn unmount_skill(&self, command: UnmountSkillCommand) -> Result<(), ApplicationError>;
     fn override_skill(&self, command: OverrideSkillCommand) -> Result<(), ApplicationError>;
@@ -81,21 +82,17 @@ impl DefaultTaskSkillsApplicationService {
         &self,
         task_ref: &str,
     ) -> Result<workc_domain::task::TaskWorkspace, ApplicationError> {
-        let task = if task_ref.starts_with("task-") {
-            self.tasks.find_by_id(&TaskId::from(task_ref))?
-        } else {
-            self.tasks
-                .find_by_slug(&workc_domain::shared::TaskSlug::from(task_ref))?
-        };
+        let slug = TaskSlug::from(task_ref);
+        let task = self.tasks.find(&slug)?;
         task.ok_or_else(|| {
             ApplicationError::Domain(DomainError::NotFound {
-                entity: "task",
-                id: task_ref.to_owned(),
+                entity: EntityKind::Task,
+                slug: task_ref.to_owned(),
             })
         })
     }
 
-    fn mount_path(_task_id: &TaskId, mount_id: &MountId) -> Utf8PathBuf {
+    fn mount_path(_slug: &TaskSlug, mount_id: &MountId) -> Utf8PathBuf {
         Utf8PathBuf::from("skills")
             .join("mounted")
             .join(mount_id.as_str())
@@ -107,19 +104,14 @@ impl DefaultTaskSkillsApplicationService {
             .join(skill_id.as_str())
     }
 
-    fn to_summary(task_id: &TaskId, mount: TaskSkillMount) -> SkillMountSummary {
+    fn to_summary(slug: &TaskSlug, mount: TaskSkillMount) -> SkillMountSummary {
         SkillMountSummary {
-            task_id: task_id.to_string(),
+            task_id: slug.to_string(),
             mount_id: mount.id.to_string(),
             skill_id: mount.skill_id.to_string(),
             version: mount.version.to_string(),
             source: mount.source.to_string(),
-            status: match mount.status {
-                TaskSkillMountStatus::Active => "active",
-                TaskSkillMountStatus::Inactive => "inactive",
-                TaskSkillMountStatus::Removed => "removed",
-            }
-            .to_owned(),
+            status: mount.status,
             path: mount.path,
         }
     }
@@ -134,8 +126,8 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         let skill_id = SkillId::from(command.skill_id.as_str());
         let skill = self.registry.find_skill(&skill_id)?.ok_or_else(|| {
             ApplicationError::Domain(DomainError::NotFound {
-                entity: "skill",
-                id: skill_id.to_string(),
+                entity: EntityKind::Skill,
+                slug: skill_id.to_string(),
             })
         })?;
         let version = command
@@ -146,14 +138,8 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
                 ApplicationError::InvalidRequest("skill version is required".to_owned())
             })?;
 
-        let mut mounts = self.mounts.list_for_task(&task.meta.id)?;
-        let max_id = mounts
-            .iter()
-            .filter_map(|m| m.id.as_str().strip_prefix("mount-"))
-            .filter_map(|s| s.parse::<usize>().ok())
-            .max()
-            .unwrap_or(0);
-        let mount_id = MountId::from(format!("mount-{:03}", max_id + 1));
+        let mut mounts = self.mounts.list_for_task(&task.meta.slug)?;
+        let mount_id = MountId::generate();
         let mount = TaskSkillMount {
             id: mount_id.clone(),
             skill_id: skill_id.clone(),
@@ -164,25 +150,25 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
             path: Self::mount_skill_path(&skill_id),
         };
         mounts.push(mount.clone());
-        self.mounts.save_for_task(&task.meta.id, &mounts)?;
-        Ok(Self::to_summary(&task.meta.id, mount))
+        self.mounts.save_for_task(&task.meta.slug, &mounts)?;
+        Ok(Self::to_summary(&task.meta.slug, mount))
     }
 
     fn list_mounts(
         &self,
-        task_id: &workc_domain::shared::TaskId,
+        slug: &TaskSlug,
     ) -> Result<Vec<SkillMountSummary>, ApplicationError> {
         Ok(self
             .mounts
-            .list_for_task(task_id)?
+            .list_for_task(slug)?
             .into_iter()
-            .map(|mount| Self::to_summary(task_id, mount))
+            .map(|mount| Self::to_summary(slug, mount))
             .collect())
     }
 
     fn unmount_skill(&self, command: UnmountSkillCommand) -> Result<(), ApplicationError> {
         self.mounts.remove_for_task(
-            &TaskId::from(command.task_id.as_str()),
+            &TaskSlug::from(command.task_id.as_str()),
             &MountId::from(command.mount_id.as_str()),
         )?;
         Ok(())
@@ -196,7 +182,7 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         &self,
         query: CheckSkillUpdatesQuery,
     ) -> Result<Vec<SkillUpdateStatus>, ApplicationError> {
-        let task_id = TaskId::from(query.task_id.as_str());
+        let task_id = TaskSlug::from(query.task_id.as_str());
         let mounts = self.mounts.list_for_task(&task_id)?;
         let selected_mounts: Option<BTreeSet<String>> =
             query.mount_id.map(|value| [value].into_iter().collect());
@@ -210,8 +196,8 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
             }
             let skill = self.registry.find_skill(&mount.skill_id)?.ok_or_else(|| {
                 ApplicationError::Domain(DomainError::NotFound {
-                    entity: "skill",
-                    id: mount.skill_id.to_string(),
+                    entity: EntityKind::Skill,
+                    slug: mount.skill_id.to_string(),
                 })
             })?;
             let update_available = skill
@@ -221,7 +207,7 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
             result.push(SkillUpdateStatus {
                 mount_id: mount.id.to_string(),
                 update_available,
-                target_version: skill.latest.map(|value| value.to_string()),
+                target_version: skill.latest,
             });
         }
 
@@ -232,7 +218,7 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         &self,
         command: UpdateSkillCommand,
     ) -> Result<SkillMountSummary, ApplicationError> {
-        let task_id = TaskId::from(command.task_id.as_str());
+        let task_id = TaskSlug::from(command.task_id.as_str());
         let mount_id = MountId::from(command.mount_id.as_str());
         let mut mounts = self.mounts.list_for_task(&task_id)?;
         let mount_index = mounts
@@ -240,15 +226,15 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
             .position(|mount| mount.id == mount_id)
             .ok_or_else(|| {
                 ApplicationError::Domain(DomainError::NotFound {
-                    entity: "mount",
-                    id: mount_id.to_string(),
+                    entity: EntityKind::Mount,
+                    slug: mount_id.to_string(),
                 })
             })?;
         let skill_id = mounts[mount_index].skill_id.clone();
         let skill = self.registry.find_skill(&skill_id)?.ok_or_else(|| {
             ApplicationError::Domain(DomainError::NotFound {
-                entity: "skill",
-                id: skill_id.to_string(),
+                entity: EntityKind::Skill,
+                slug: skill_id.to_string(),
             })
         })?;
         mounts[mount_index].version = skill.latest.clone().ok_or_else(|| {
@@ -263,7 +249,7 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         &self,
         command: SandboxSkillCommand,
     ) -> Result<SkillSandboxHandle, ApplicationError> {
-        let task_id = TaskId::from(command.task_id.as_str());
+        let task_id = TaskSlug::from(command.task_id.as_str());
         let mount_id = MountId::from(command.mount_id.as_str());
         Ok(SkillSandboxHandle {
             mount_id: mount_id.to_string(),
@@ -275,7 +261,7 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         &self,
         command: PrepareSkillCommand,
     ) -> Result<SkillPreparation, ApplicationError> {
-        let task_id = TaskId::from(command.task_id.as_str());
+        let task_id = TaskSlug::from(command.task_id.as_str());
         let mount_id = MountId::from(command.mount_id.as_str());
         let path = Self::mount_path(&task_id, &mount_id);
         let runtime = self
@@ -296,14 +282,14 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
             })?;
         Ok(SkillPreparation {
             mount_id: mount_id.to_string(),
-            status: format!("{:?}", result.status),
+            status: result.status,
             artifact_path: result.artifact_path,
             log_path: result.log_path,
         })
     }
 
     fn use_skill(&self, command: UseSkillCommand) -> Result<SkillUseExecution, ApplicationError> {
-        let task_id = TaskId::from(command.task_id.as_str());
+        let task_id = TaskSlug::from(command.task_id.as_str());
         let mount_id = MountId::from(command.mount_id.as_str());
         let path = Self::mount_path(&task_id, &mount_id);
         let runtime = self
@@ -324,7 +310,7 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
             })?;
         Ok(SkillUseExecution {
             mount_id: mount_id.to_string(),
-            status: format!("{:?}", result.status),
+            status: result.status,
             log_path: result.log_path,
         })
     }
@@ -333,7 +319,7 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         &self,
         query: PrepareStatusQuery,
     ) -> Result<PrepareStatusRecord, ApplicationError> {
-        let task_id = TaskId::from(query.task_id.as_str());
+        let task_id = TaskSlug::from(query.task_id.as_str());
         let mount_id = MountId::from(query.mount_id.as_str());
         let path = Self::mount_path(&task_id, &mount_id);
         let runtime = self
@@ -356,8 +342,9 @@ mod tests {
 
     use camino::Utf8Path;
     use time::OffsetDateTime;
-    use workc_domain::errors::DomainError;
-    use workc_domain::shared::{MountId, SkillId, SkillSourceId, SkillVersion, TaskId, TaskSlug};
+    
+use workc_domain::errors::{DomainError, EntityKind};
+    use workc_domain::shared::{MountId, SkillId, SkillSourceId, SkillVersion, TaskSlug};
     use workc_domain::skill_registry::{
         PrepareResult, PrepareStep, SkillDefinition, SkillExecutionStatus, SkillRegistry,
         SkillRegistryRepository, SkillSource, UseResult, UseStep,
@@ -377,16 +364,9 @@ mod tests {
     }
 
     impl TaskRepository for InMemoryTaskRepository {
-        fn find_by_id(&self, id: &TaskId) -> Result<Option<TaskWorkspace>, DomainError> {
-            Ok(self
-                .tasks
-                .borrow()
-                .values()
-                .find(|t| t.meta.id == *id)
-                .cloned())
-        }
+        
 
-        fn find_by_slug(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
+        fn find(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
             Ok(self
                 .tasks
                 .borrow()
@@ -402,7 +382,7 @@ mod tests {
         fn save(&self, task: &TaskWorkspace) -> Result<(), DomainError> {
             self.tasks
                 .borrow_mut()
-                .insert(task.meta.id.to_string(), task.clone());
+                .insert(task.meta.slug.to_string(), task.clone());
             Ok(())
         }
     }
@@ -449,28 +429,28 @@ mod tests {
     }
 
     impl TaskSkillMountRepository for InMemoryTaskSkillMountRepository {
-        fn list_for_task(&self, task_id: &TaskId) -> Result<Vec<TaskSkillMount>, DomainError> {
+        fn list_for_task(&self, slug: &TaskSlug) -> Result<Vec<TaskSkillMount>, DomainError> {
             Ok(self
                 .mounts
                 .borrow()
-                .get(task_id.as_str())
+                .get(slug.as_str())
                 .cloned()
                 .unwrap_or_default())
         }
 
         fn save_for_task(
             &self,
-            task_id: &TaskId,
+            slug: &TaskSlug,
             mounts: &[TaskSkillMount],
         ) -> Result<(), DomainError> {
             self.mounts
                 .borrow_mut()
-                .insert(task_id.to_string(), mounts.to_vec());
+                .insert(slug.to_string(), mounts.to_vec());
             Ok(())
         }
 
-        fn remove_for_task(&self, task_id: &TaskId, mount_id: &MountId) -> Result<(), DomainError> {
-            if let Some(mounts) = self.mounts.borrow_mut().get_mut(task_id.as_str()) {
+        fn remove_for_task(&self, slug: &TaskSlug, mount_id: &MountId) -> Result<(), DomainError> {
+            if let Some(mounts) = self.mounts.borrow_mut().get_mut(slug.as_str()) {
                 mounts.retain(|m| m.id != *mount_id);
             }
             Ok(())
@@ -529,7 +509,6 @@ mod tests {
     fn sample_task() -> TaskWorkspace {
         TaskWorkspace {
             meta: TaskMeta {
-                id: TaskId::from("task-20260524-auth"),
                 slug: TaskSlug::from("auth-fix"),
                 title: "Auth Fix".to_owned(),
                 template: "default".to_owned(),
@@ -601,7 +580,7 @@ mod tests {
         let svc = service_without_runtime();
         let summary = svc
             .mount_skill(MountSkillCommand {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 skill_id: "frontend-testing".to_owned(),
                 version: None,
             })
@@ -609,7 +588,7 @@ mod tests {
 
         assert_eq!(summary.skill_id, "frontend-testing");
         assert_eq!(summary.version, "2026-05-22");
-        assert_eq!(summary.status, "active");
+        assert_eq!(summary.status, TaskSkillMountStatus::Active);
         assert!(summary.path.as_str().contains("frontend-testing"));
     }
 
@@ -617,7 +596,7 @@ mod tests {
     fn mount_skill_fails_for_missing_skill() {
         let svc = service_without_runtime();
         let result = svc.mount_skill(MountSkillCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             skill_id: "nonexistent".to_owned(),
             version: None,
         });
@@ -644,7 +623,7 @@ mod tests {
         );
 
         let result = svc.mount_skill(MountSkillCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             skill_id: "frontend-testing".to_owned(),
             version: None,
         });
@@ -655,7 +634,7 @@ mod tests {
     fn list_mounts_returns_empty_initially() {
         let svc = service_without_runtime();
         let mounts = svc
-            .list_mounts(&TaskId::from("task-20260524-auth"))
+            .list_mounts(&TaskSlug::from("auth-fix"))
             .unwrap();
         assert!(mounts.is_empty());
     }
@@ -665,20 +644,20 @@ mod tests {
         let svc = service_without_runtime();
         let summary = svc
             .mount_skill(MountSkillCommand {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 skill_id: "frontend-testing".to_owned(),
                 version: None,
             })
             .unwrap();
 
         svc.unmount_skill(UnmountSkillCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             mount_id: summary.mount_id.clone(),
         })
         .unwrap();
 
         let mounts = svc
-            .list_mounts(&TaskId::from("task-20260524-auth"))
+            .list_mounts(&TaskSlug::from("auth-fix"))
             .unwrap();
         assert!(mounts.is_empty());
     }
@@ -701,7 +680,7 @@ mod tests {
     fn check_skill_updates_detects_update_available() {
         let svc = service_without_runtime();
         svc.mount_skill(MountSkillCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             skill_id: "frontend-testing".to_owned(),
             version: Some("2026-05-20".to_owned()),
         })
@@ -709,20 +688,20 @@ mod tests {
 
         let updates = svc
             .check_skill_updates(CheckSkillUpdatesQuery {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 mount_id: None,
             })
             .unwrap();
         assert_eq!(updates.len(), 1);
         assert!(updates[0].update_available);
-        assert_eq!(updates[0].target_version.as_deref(), Some("2026-05-22"));
+        assert_eq!(updates[0].target_version.as_ref().map(|v| v.as_str()), Some("2026-05-22"));
     }
 
     #[test]
     fn check_skill_updates_no_update_when_already_latest() {
         let svc = service_without_runtime();
         svc.mount_skill(MountSkillCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             skill_id: "frontend-testing".to_owned(),
             version: None,
         })
@@ -730,7 +709,7 @@ mod tests {
 
         let updates = svc
             .check_skill_updates(CheckSkillUpdatesQuery {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 mount_id: None,
             })
             .unwrap();
@@ -741,8 +720,8 @@ mod tests {
     #[test]
     fn update_skill_changes_version_to_latest() {
         let svc = service_without_runtime();
-        svc.mount_skill(MountSkillCommand {
-            task_id: "task-20260524-auth".to_owned(),
+        let summary = svc.mount_skill(MountSkillCommand {
+            task_id: "auth-fix".to_owned(),
             skill_id: "frontend-testing".to_owned(),
             version: Some("2026-05-20".to_owned()),
         })
@@ -750,8 +729,8 @@ mod tests {
 
         let updated = svc
             .update_skill(UpdateSkillCommand {
-                task_id: "task-20260524-auth".to_owned(),
-                mount_id: "mount-001".to_owned(),
+                task_id: "auth-fix".to_owned(),
+                mount_id: summary.mount_id,
             })
             .unwrap();
 
@@ -762,7 +741,7 @@ mod tests {
     fn update_skill_fails_for_missing_mount() {
         let svc = service_without_runtime();
         let result = svc.update_skill(UpdateSkillCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             mount_id: "mount-999".to_owned(),
         });
         assert!(result.is_err());
@@ -773,7 +752,7 @@ mod tests {
         let svc = service_without_runtime();
         let handle = svc
             .sandbox_skill(SandboxSkillCommand {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 mount_id: "mount-001".to_owned(),
             })
             .unwrap();
@@ -787,7 +766,7 @@ mod tests {
         let svc = service_with_runtime();
         let result = svc
             .prepare_skill(PrepareSkillCommand {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 mount_id: "mount-001".to_owned(),
                 step: super::super::dtos::RuntimeStep {
                     name: "install".to_owned(),
@@ -796,7 +775,7 @@ mod tests {
             })
             .unwrap();
 
-        assert!(result.status.contains("Success"));
+        assert!(result.status == SkillExecutionStatus::Success);
         assert!(result.artifact_path.is_some());
         assert!(result.log_path.is_some());
     }
@@ -805,7 +784,7 @@ mod tests {
     fn prepare_skill_fails_without_runtime() {
         let svc = service_without_runtime();
         let result = svc.prepare_skill(PrepareSkillCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             mount_id: "mount-001".to_owned(),
             step: super::super::dtos::RuntimeStep {
                 name: "install".to_owned(),
@@ -823,7 +802,7 @@ mod tests {
         let svc = service_with_runtime();
         let result = svc
             .use_skill(UseSkillCommand {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 mount_id: "mount-001".to_owned(),
                 step: super::super::dtos::RuntimeStep {
                     name: "lint".to_owned(),
@@ -832,7 +811,7 @@ mod tests {
             })
             .unwrap();
 
-        assert!(result.status.contains("Success"));
+        assert!(result.status == SkillExecutionStatus::Success);
         assert!(result.log_path.is_some());
     }
 
@@ -840,7 +819,7 @@ mod tests {
     fn use_skill_fails_without_runtime() {
         let svc = service_without_runtime();
         let result = svc.use_skill(UseSkillCommand {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             mount_id: "mount-001".to_owned(),
             step: super::super::dtos::RuntimeStep {
                 name: "lint".to_owned(),
@@ -858,7 +837,7 @@ mod tests {
         let svc = service_with_runtime();
         let result = svc
             .get_prepare_status(PrepareStatusQuery {
-                task_id: "task-20260524-auth".to_owned(),
+                task_id: "auth-fix".to_owned(),
                 mount_id: "mount-001".to_owned(),
             })
             .unwrap();
@@ -871,7 +850,7 @@ mod tests {
     fn get_prepare_status_fails_without_runtime() {
         let svc = service_without_runtime();
         let result = svc.get_prepare_status(PrepareStatusQuery {
-            task_id: "task-20260524-auth".to_owned(),
+            task_id: "auth-fix".to_owned(),
             mount_id: "mount-001".to_owned(),
         });
         assert!(matches!(

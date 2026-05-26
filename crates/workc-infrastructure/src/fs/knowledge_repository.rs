@@ -3,11 +3,13 @@ use std::fs;
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 use time::format_description::well_known::Rfc3339;
+use workc_domain::errors::EntityKind;
+use workc_domain::errors::FieldKind;
 use workc_domain::errors::DomainError;
 use workc_domain::knowledge::{
     KnowledgeBase, KnowledgeCandidate, KnowledgeEntry, KnowledgeRepository, KnowledgeSourceRef,
 };
-use workc_domain::shared::{KnowledgeCandidateId, KnowledgeId, TaskId, Timestamp};
+use workc_domain::shared::{KnowledgeCandidateId, KnowledgeId, TaskSlug, Timestamp};
 
 use super::paths;
 
@@ -19,7 +21,7 @@ pub struct FsKnowledgeRepository {
 struct KnowledgeMetaToml {
     id: String,
     #[serde(default)]
-    task_id: Option<String>,
+    task_slug: Option<String>,
     title: String,
     status: String,
     category: Option<String>,
@@ -33,7 +35,7 @@ struct KnowledgeMetaToml {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SourceToml {
-    task_id: String,
+    task_slug: String,
     source_path: String,
     section: Option<String>,
     excerpt: Option<String>,
@@ -48,12 +50,12 @@ impl FsKnowledgeRepository {
         paths::workc_knowledge_root()
     }
 
-    fn candidates_root(&self, _task_id: &TaskId) -> Utf8PathBuf {
+    fn candidates_root(&self, _task_slug: &TaskSlug) -> Utf8PathBuf {
         self.project_root.join("knowledge-candidates")
     }
 
-    fn candidate_dir(&self, task_id: &TaskId, candidate_id: &KnowledgeCandidateId) -> Utf8PathBuf {
-        self.candidates_root(task_id).join(candidate_id.as_str())
+    fn candidate_dir(&self, task_slug: &TaskSlug, candidate_id: &KnowledgeCandidateId) -> Utf8PathBuf {
+        self.candidates_root(task_slug).join(candidate_id.as_str())
     }
 
     fn knowledge_dir(&self, knowledge_id: &KnowledgeId) -> Utf8PathBuf {
@@ -70,7 +72,7 @@ impl FsKnowledgeRepository {
 
     fn write_sources(
         dir: &Utf8PathBuf,
-        task_id: &TaskId,
+        task_slug: &TaskSlug,
         sources: &[KnowledgeSourceRef],
     ) -> Result<(), DomainError> {
         let sources_dir = Self::sources_dir(dir);
@@ -79,7 +81,7 @@ impl FsKnowledgeRepository {
         for (index, source) in sources.iter().enumerate() {
             let file = sources_dir.join(format!("source-{index:03}.toml"));
             let raw = toml::to_string_pretty(&SourceToml {
-                task_id: task_id.to_string(),
+                task_slug: task_slug.to_string(),
                 source_path: source.source_path.to_string(),
                 section: source.section.clone(),
                 excerpt: source.excerpt.clone(),
@@ -119,7 +121,7 @@ impl FsKnowledgeRepository {
                 timestamp
                     .format(&Rfc3339)
                     .map_err(|error| DomainError::InvalidInput {
-                        field: "timestamp",
+                        field: FieldKind::Timestamp,
                         reason: error.to_string(),
                     })
             })
@@ -130,7 +132,7 @@ impl FsKnowledgeRepository {
         value
             .map(|raw| {
                 Timestamp::parse(&raw, &Rfc3339).map_err(|error| DomainError::InvalidInput {
-                    field: "timestamp",
+                    field: FieldKind::Timestamp,
                     reason: error.to_string(),
                 })
             })
@@ -150,7 +152,7 @@ impl KnowledgeRepository for FsKnowledgeRepository {
             let entry = entry.map_err(io_error("iterate knowledge root"))?;
             let dir = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
                 DomainError::InvalidInput {
-                    field: "knowledge path",
+                    field: FieldKind::Other("knowledge path"),
                     reason: path.display().to_string(),
                 }
             })?;
@@ -185,8 +187,8 @@ impl KnowledgeRepository for FsKnowledgeRepository {
         Ok(())
     }
 
-    fn list_candidates(&self, task_id: &TaskId) -> Result<Vec<KnowledgeCandidate>, DomainError> {
-        let root = self.candidates_root(task_id);
+    fn list_candidates(&self, task_slug: &TaskSlug) -> Result<Vec<KnowledgeCandidate>, DomainError> {
+        let root = self.candidates_root(task_slug);
         if !root.exists() {
             return Ok(Vec::new());
         }
@@ -196,7 +198,7 @@ impl KnowledgeRepository for FsKnowledgeRepository {
             let entry = entry.map_err(io_error("iterate candidate root"))?;
             let dir = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
                 DomainError::InvalidInput {
-                    field: "candidate path",
+                    field: FieldKind::Other("candidate path"),
                     reason: path.display().to_string(),
                 }
             })?;
@@ -210,7 +212,7 @@ impl KnowledgeRepository for FsKnowledgeRepository {
             let sources = Self::read_sources(&dir)?;
             candidates.push(KnowledgeCandidate {
                 id: KnowledgeCandidateId::from(meta.id),
-                task_id: TaskId::from(meta.task_id.unwrap_or_else(|| task_id.to_string())),
+                task_slug: TaskSlug::from(meta.task_slug.unwrap_or_else(|| task_slug.to_string())),
                 title: meta.title,
                 path: dir,
                 category: meta.category,
@@ -225,11 +227,11 @@ impl KnowledgeRepository for FsKnowledgeRepository {
     }
 
     fn create_candidate(&self, candidate: &KnowledgeCandidate) -> Result<(), DomainError> {
-        let dir = self.candidate_dir(&candidate.task_id, &candidate.id);
+        let dir = self.candidate_dir(&candidate.task_slug, &candidate.id);
         fs::create_dir_all(&dir).map_err(io_error("create candidate dir"))?;
         let raw = toml::to_string_pretty(&KnowledgeMetaToml {
             id: candidate.id.to_string(),
-            task_id: Some(candidate.task_id.to_string()),
+            task_slug: Some(candidate.task_slug.to_string()),
             title: candidate.title.clone(),
             status: "candidate".to_owned(),
             category: candidate.category.clone(),
@@ -239,19 +241,19 @@ impl KnowledgeRepository for FsKnowledgeRepository {
         })
         .map_err(invalid_serialize("meta.toml"))?;
         fs::write(Self::meta_path(&dir), raw).map_err(io_error("write candidate meta"))?;
-        Self::write_sources(&dir, &candidate.task_id, &candidate.sources)?;
+        Self::write_sources(&dir, &candidate.task_slug, &candidate.sources)?;
         Ok(())
     }
 
     fn update_candidate(
         &self,
-        task_id: &TaskId,
+        task_slug: &TaskSlug,
         candidate: &KnowledgeCandidate,
     ) -> Result<(), DomainError> {
-        if candidate.task_id != *task_id {
+        if candidate.task_slug != *task_slug {
             return Err(DomainError::Conflict {
-                entity: "knowledge-candidate",
-                reason: "task_id mismatch".to_owned(),
+                entity: EntityKind::KnowledgeCandidate,
+                reason: "task_slug mismatch".to_owned(),
             });
         }
         self.create_candidate(candidate)
@@ -259,10 +261,10 @@ impl KnowledgeRepository for FsKnowledgeRepository {
 
     fn delete_candidate(
         &self,
-        task_id: &TaskId,
+        task_slug: &TaskSlug,
         candidate_id: &KnowledgeCandidateId,
     ) -> Result<(), DomainError> {
-        let dir = self.candidate_dir(task_id, candidate_id);
+        let dir = self.candidate_dir(task_slug, candidate_id);
         if dir.exists() {
             fs::remove_dir_all(dir).map_err(io_error("delete candidate dir"))?;
         }
@@ -271,11 +273,11 @@ impl KnowledgeRepository for FsKnowledgeRepository {
 
     fn find_candidate(
         &self,
-        task_id: &TaskId,
+        task_slug: &TaskSlug,
         candidate_id: &KnowledgeCandidateId,
     ) -> Result<Option<KnowledgeCandidate>, DomainError> {
         Ok(self
-            .list_candidates(task_id)?
+            .list_candidates(task_slug)?
             .into_iter()
             .find(|candidate| candidate.id == *candidate_id))
     }
@@ -284,7 +286,7 @@ impl KnowledgeRepository for FsKnowledgeRepository {
         fs::create_dir_all(&entry.path).map_err(io_error("create knowledge dir"))?;
         let raw = toml::to_string_pretty(&KnowledgeMetaToml {
             id: entry.id.to_string(),
-            task_id: None,
+            task_slug: None,
             title: entry.title.clone(),
             status: "published".to_owned(),
             category: entry.category.clone(),
@@ -294,7 +296,7 @@ impl KnowledgeRepository for FsKnowledgeRepository {
         })
         .map_err(invalid_serialize("meta.toml"))?;
         fs::write(Self::meta_path(&entry.path), raw).map_err(io_error("write knowledge meta"))?;
-        Self::write_sources(&entry.path, &TaskId::from("global"), &entry.sources)?;
+        Self::write_sources(&entry.path, &TaskSlug::from("global"), &entry.sources)?;
         Ok(())
     }
 
@@ -312,15 +314,15 @@ impl KnowledgeRepository for FsKnowledgeRepository {
 
     fn promote_candidate(
         &self,
-        task_id: &TaskId,
+        task_slug: &TaskSlug,
         candidate_id: &KnowledgeCandidateId,
         knowledge_id: &KnowledgeId,
     ) -> Result<(), DomainError> {
         let candidate =
-            self.find_candidate(task_id, candidate_id)?
+            self.find_candidate(task_slug, candidate_id)?
                 .ok_or_else(|| DomainError::NotFound {
-                    entity: "knowledge-candidate",
-                    id: candidate_id.to_string(),
+                    entity: EntityKind::KnowledgeCandidate,
+                    slug: candidate_id.to_string(),
                 })?;
         let target = self.knowledge_dir(knowledge_id);
         let entry = KnowledgeEntry {
@@ -334,7 +336,7 @@ impl KnowledgeRepository for FsKnowledgeRepository {
             updated_at: candidate.updated_at,
         };
         self.create_entry(&entry)?;
-        self.delete_candidate(task_id, candidate_id)?;
+        self.delete_candidate(task_slug, candidate_id)?;
         Ok(())
     }
 
@@ -347,23 +349,17 @@ impl KnowledgeRepository for FsKnowledgeRepository {
     }
 }
 
-fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {
-    move |error| DomainError::PersistenceFailed {
-        operation,
+fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError { move |error| DomainError::PersistenceFailed { operation: operation,
         detail: error.to_string(),
     }
 }
 
-fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError {
-    move |error| DomainError::InvalidInput {
-        field,
+fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }
 
-fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError {
-    move |error| DomainError::InvalidInput {
-        field,
+fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }

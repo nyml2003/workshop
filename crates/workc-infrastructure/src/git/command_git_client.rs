@@ -50,8 +50,12 @@ impl CommandGitClient {
             });
         }
 
-        let behind = parts[0].trim().parse::<usize>().unwrap_or(0);
-        let ahead = parts[1].trim().parse::<usize>().unwrap_or(0);
+        let behind = parts[0].trim().parse::<usize>().map_err(|e| GitError {
+            detail: format!("invalid rev-list behind count: {e}"),
+        })?;
+        let ahead = parts[1].trim().parse::<usize>().map_err(|e| GitError {
+            detail: format!("invalid rev-list ahead count: {e}"),
+        })?;
         Ok((behind, ahead))
     }
 }
@@ -138,7 +142,7 @@ impl GitClient for CommandGitClient {
             .trim()
             .is_empty();
 
-        let (behind, ahead) = Self::ahead_behind(path).unwrap_or((0, 0));
+        let (behind, ahead) = Self::ahead_behind(path)?;
 
         Ok(RepoStatus {
             branch: (!branch.is_empty()).then_some(branch),
