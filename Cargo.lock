@@ -461,7 +461,7 @@ dependencies = [
 
 [[package]]
 name = "workc-application"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "camino",
@@ -472,7 +472,7 @@ dependencies = [
 
 [[package]]
 name = "workc-cli"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "camino",
@@ -487,7 +487,7 @@ dependencies = [
 
 [[package]]
 name = "workc-domain"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "camino",
  "nanoid",
@@ -497,7 +497,7 @@ dependencies = [
 
 [[package]]
 name = "workc-infrastructure"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "camino",
