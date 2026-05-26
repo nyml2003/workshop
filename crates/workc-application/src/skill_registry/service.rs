@@ -306,4 +306,85 @@ mod tests {
             .unwrap();
         assert!(versions.is_empty());
     }
+
+    #[test]
+    fn list_skill_versions_returns_versions_for_existing_skill() {
+        let repo = InMemorySkillRegistryRepository::default();
+        repo.registry.borrow_mut().skills.push(SkillDefinition {
+            id: SkillId::from("frontend-testing"),
+            source: SkillSourceId::from("src"),
+            versions: vec![
+                SkillVersion::from("v1"),
+                SkillVersion::from("v2"),
+            ],
+            latest: Some(SkillVersion::from("v2")),
+        });
+        let service = DefaultSkillRegistryApplicationService::new(Box::new(repo), Box::new(FixedClock));
+        let versions = service
+            .list_skill_versions(ShowSkillQuery {
+                skill_id: "frontend-testing".to_owned(),
+            })
+            .unwrap();
+        assert_eq!(versions, vec!["v1".to_owned(), "v2".to_owned()]);
+    }
+
+    #[test]
+    fn import_source_with_archive_kind() {
+        let service = DefaultSkillRegistryApplicationService::new(
+            Box::new(InMemorySkillRegistryRepository::default()),
+            Box::new(FixedClock),
+        );
+        let result = service.import_source(ImportSkillSourceCommand {
+            source_id: "my-source".to_owned(),
+            kind: ApplicationSkillSourceKind::Archive,
+            location: "https://example.com/skill.zip".to_owned(),
+            reference: None,
+            skills: vec![ImportedSkillDefinition {
+                id: "archive-skill".to_owned(),
+                versions: vec![],
+                latest: None,
+            }],
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn import_source_with_other_kind() {
+        let service = DefaultSkillRegistryApplicationService::new(
+            Box::new(InMemorySkillRegistryRepository::default()),
+            Box::new(FixedClock),
+        );
+        let result = service.import_source(ImportSkillSourceCommand {
+            source_id: "custom-src".to_owned(),
+            kind: ApplicationSkillSourceKind::Other("custom-type".to_owned()),
+            location: "/tmp/skill".to_owned(),
+            reference: None,
+            skills: vec![ImportedSkillDefinition {
+                id: "custom-skill".to_owned(),
+                versions: vec![],
+                latest: None,
+            }],
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn import_source_with_local_kind() {
+        let service = DefaultSkillRegistryApplicationService::new(
+            Box::new(InMemorySkillRegistryRepository::default()),
+            Box::new(FixedClock),
+        );
+        let result = service.import_source(ImportSkillSourceCommand {
+            source_id: "local-src".to_owned(),
+            kind: ApplicationSkillSourceKind::Local,
+            location: "/home/user/skills/my-skill".to_owned(),
+            reference: None,
+            skills: vec![ImportedSkillDefinition {
+                id: "local-skill".to_owned(),
+                versions: vec![],
+                latest: None,
+            }],
+        });
+        assert!(result.is_ok());
+    }
 }

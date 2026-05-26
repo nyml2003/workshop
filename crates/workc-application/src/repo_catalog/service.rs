@@ -385,4 +385,39 @@ mod tests {
         assert_eq!(groups[0].id, "a-group");
         assert_eq!(groups[1].id, "z-group");
     }
+
+    #[test]
+    fn add_repo_group_rejects_duplicate() {
+        let service = DefaultRepoCatalogApplicationService::new(Box::new(
+            InMemoryRepoCatalogRepository::default(),
+        ));
+        service
+            .add_repo(AddRepoCommand {
+                id: "auth-service".to_owned(),
+                url: "url".to_owned(),
+                tags: vec![],
+                description: None,
+            })
+            .unwrap();
+        service
+            .add_repo_group(AddRepoGroupCommand {
+                id: "my-group".to_owned(),
+                repos: vec!["auth-service".to_owned()],
+                tags: vec![],
+                description: None,
+            })
+            .unwrap();
+
+        let result = service.add_repo_group(AddRepoGroupCommand {
+            id: "my-group".to_owned(),
+            repos: vec!["auth-service".to_owned()],
+            tags: vec![],
+            description: None,
+        });
+
+        assert!(matches!(
+            result,
+            Err(ApplicationError::Domain(DomainError::AlreadyExists { entity, .. })) if entity == EntityKind::RepoGroup
+        ));
+    }
 }

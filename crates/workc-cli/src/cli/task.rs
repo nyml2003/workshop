@@ -294,7 +294,6 @@ pub fn run() -> Result<String> {
                             Box::new(FsTaskSkillMountRepository::new(workspace_root.clone())),
                             Box::new(FsSkillRegistryRepository::new()),
                             Box::new(SystemClock),
-                            None,
                         );
                     for skill_id in &command.skills {
                         skill_service.mount_skill(MountSkillCommand {

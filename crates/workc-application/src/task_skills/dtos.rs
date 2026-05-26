@@ -1,7 +1,6 @@
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use workc_domain::shared::SkillVersion;
-use workc_domain::skill_registry::SkillExecutionStatus;
 use workc_domain::task::TaskSkillMountStatus;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,26 +52,6 @@ pub struct SandboxSkillCommand {
     pub mount_id: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PrepareSkillCommand {
-    pub task_id: String,
-    pub mount_id: String,
-    pub step: RuntimeStep,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UseSkillCommand {
-    pub task_id: String,
-    pub mount_id: String,
-    pub step: RuntimeStep,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PrepareStatusQuery {
-    pub task_id: String,
-    pub mount_id: String,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct SkillUpdateStatus {
     pub mount_id: String,
@@ -84,25 +63,4 @@ pub struct SkillUpdateStatus {
 pub struct SkillSandboxHandle {
     pub mount_id: String,
     pub path: Utf8PathBuf,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SkillPreparation {
-    pub mount_id: String,
-    pub status: SkillExecutionStatus,
-    pub artifact_path: Option<Utf8PathBuf>,
-    pub log_path: Option<Utf8PathBuf>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SkillUseExecution {
-    pub mount_id: String,
-    pub status: SkillExecutionStatus,
-    pub log_path: Option<Utf8PathBuf>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RuntimeStep {
-    pub name: String,
-    pub action_id: String,
 }

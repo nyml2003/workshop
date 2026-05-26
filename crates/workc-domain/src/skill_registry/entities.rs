@@ -59,6 +59,26 @@ impl Display for SkillExecutionStatus {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_pending() {
+        assert_eq!(SkillExecutionStatus::Pending.to_string(), "pending");
+    }
+
+    #[test]
+    fn display_success() {
+        assert_eq!(SkillExecutionStatus::Success.to_string(), "success");
+    }
+
+    #[test]
+    fn display_failed() {
+        assert_eq!(SkillExecutionStatus::Failed.to_string(), "failed");
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PrepareResult {
     pub status: SkillExecutionStatus,

@@ -54,3 +54,20 @@ pub fn workc_knowledge_root() -> Utf8PathBuf {
 pub fn workc_workspaces_path() -> Utf8PathBuf {
     workc_home().join("workspaces.toml")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paths_end_with_correct_suffixes() {
+        assert!(workc_home().as_str().ends_with(".workc"));
+        assert!(workc_config_path().as_str().ends_with("config.toml"));
+        assert!(workc_repos_root().as_str().ends_with("repos"));
+        assert!(workc_skills_root().as_str().ends_with("skills"));
+        assert!(workc_skills_registry_root().as_str().ends_with("registry"));
+        assert!(workc_skills_cache_root().as_str().ends_with("cache"));
+        assert!(workc_knowledge_root().as_str().ends_with("knowledge"));
+        assert!(workc_workspaces_path().as_str().ends_with("workspaces.toml"));
+    }
+}

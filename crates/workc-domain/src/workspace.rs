@@ -41,3 +41,43 @@ pub trait WorkspaceRegistryRepository {
     fn load(&self) -> Result<Vec<WorkspaceEntry>, DomainError>;
     fn save(&self, entries: &[WorkspaceEntry]) -> Result<(), DomainError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn as_str_active() {
+        assert_eq!(WorkspaceStatus::Active.as_str(), "active");
+    }
+
+    #[test]
+    fn as_str_closed() {
+        assert_eq!(WorkspaceStatus::Closed.as_str(), "closed");
+    }
+
+    #[test]
+    fn as_str_archived() {
+        assert_eq!(WorkspaceStatus::Archived.as_str(), "archived");
+    }
+
+    #[test]
+    fn parse_active() {
+        assert_eq!(WorkspaceStatus::parse("active"), Some(WorkspaceStatus::Active));
+    }
+
+    #[test]
+    fn parse_closed() {
+        assert_eq!(WorkspaceStatus::parse("closed"), Some(WorkspaceStatus::Closed));
+    }
+
+    #[test]
+    fn parse_archived() {
+        assert_eq!(WorkspaceStatus::parse("archived"), Some(WorkspaceStatus::Archived));
+    }
+
+    #[test]
+    fn parse_unknown_returns_none() {
+        assert_eq!(WorkspaceStatus::parse("unknown"), None);
+    }
+}

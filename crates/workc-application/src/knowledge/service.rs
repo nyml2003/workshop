@@ -710,4 +710,77 @@ use workc_domain::errors::DomainError;
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].id, "k-001");
     }
+
+    #[test]
+    fn update_knowledge_meta_changes_title_category_tags() {
+        let svc = service();
+        let repo = InMemoryKnowledgeRepository::new();
+        let entry = KnowledgeEntry {
+            id: KnowledgeId::from("k-existing"),
+            title: "Old".to_owned(),
+            path: Utf8PathBuf::from("k"),
+            category: Some("old".to_owned()),
+            tags: vec!["old".to_owned()],
+            sources: vec![],
+            created_at: Some(OffsetDateTime::UNIX_EPOCH),
+            updated_at: Some(OffsetDateTime::UNIX_EPOCH),
+        };
+        repo.create_entry(&entry).unwrap();
+        let svc = DefaultKnowledgeApplicationService::new(Box::new(repo), Box::new(FixedClock));
+
+        let result = svc
+            .update_knowledge_meta(UpdateKnowledgeMetaCommand {
+                knowledge_id: "k-existing".to_owned(),
+                title: Some("New".to_owned()),
+                category: Some("new-cat".to_owned()),
+                tags: Some(vec!["new-tag".to_owned()]),
+            })
+            .unwrap();
+
+        assert_eq!(result.knowledge.title, "New");
+        assert_eq!(result.knowledge.category.as_deref(), Some("new-cat"));
+        assert_eq!(result.knowledge.tags, vec!["new-tag"]);
+    }
+
+    #[test]
+    fn promote_applies_category_and_tags_overrides() {
+        let svc = service();
+        svc.create_candidate(CreateKnowledgeCandidateCommand {
+            task_id: "auth-fix".to_owned(),
+            candidate_id: "cand-cat".to_owned(),
+            title: "Auth patterns".to_owned(),
+            category: Some("security".to_owned()),
+            tags: vec!["auth".to_owned()],
+            source_paths: vec![],
+        })
+        .unwrap();
+
+        let result = svc
+            .promote(PromoteKnowledgeCommand {
+                task_id: "auth-fix".to_owned(),
+                candidate_id: "cand-cat".to_owned(),
+                knowledge_id: "k-cat".to_owned(),
+                title: None,
+                category: Some("infra".to_owned()),
+                tags: Some(vec!["network".to_owned()]),
+            })
+            .unwrap();
+
+        assert_eq!(result.knowledge.category.as_deref(), Some("infra"));
+        assert_eq!(result.knowledge.tags, vec!["network"]);
+    }
+
+    #[test]
+    fn promote_fails_when_candidate_missing() {
+        let svc = service();
+        let result = svc.promote(PromoteKnowledgeCommand {
+            task_id: "auth-fix".to_owned(),
+            candidate_id: "cand-nonexistent".to_owned(),
+            knowledge_id: "k-x".to_owned(),
+            title: None,
+            category: None,
+            tags: None,
+        });
+        assert!(result.is_err());
+    }
 }

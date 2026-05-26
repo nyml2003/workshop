@@ -565,4 +565,20 @@ mod tests {
 
         assert_eq!(launcher.borrow()[0].0.as_str(), "/workspace");
     }
+
+    #[test]
+    fn to_domain_status_converts_all_variants() {
+        assert_eq!(to_domain_status(&ApplicationTaskStatus::Draft), TaskStatus::Draft);
+        assert_eq!(to_domain_status(&ApplicationTaskStatus::Active), TaskStatus::Active);
+        assert_eq!(to_domain_status(&ApplicationTaskStatus::Closed), TaskStatus::Closed);
+        assert_eq!(to_domain_status(&ApplicationTaskStatus::Archived), TaskStatus::Archived);
+    }
+
+    #[test]
+    fn from_domain_status_converts_all_variants() {
+        assert_eq!(from_domain_status(TaskStatus::Draft), ApplicationTaskStatus::Draft);
+        assert_eq!(from_domain_status(TaskStatus::Active), ApplicationTaskStatus::Active);
+        assert_eq!(from_domain_status(TaskStatus::Closed), ApplicationTaskStatus::Closed);
+        assert_eq!(from_domain_status(TaskStatus::Archived), ApplicationTaskStatus::Archived);
+    }
 }

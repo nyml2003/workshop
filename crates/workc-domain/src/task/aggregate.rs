@@ -173,4 +173,26 @@ mod tests {
         );
         assert_eq!(task.paths.task_skills_dir.as_str(), ".codex/skills");
     }
+
+    #[test]
+    fn close_on_closed_task_returns_conflict() {
+        let mut task = sample_task();
+        task.meta.status = TaskStatus::Closed;
+        let result = task.close(OffsetDateTime::UNIX_EPOCH);
+        assert!(matches!(
+            result,
+            Err(DomainError::Conflict { entity: EntityKind::Task, reason }) if reason == "already closed"
+        ));
+    }
+
+    #[test]
+    fn close_on_archived_task_returns_conflict() {
+        let mut task = sample_task();
+        task.meta.status = TaskStatus::Archived;
+        let result = task.close(OffsetDateTime::UNIX_EPOCH);
+        assert!(matches!(
+            result,
+            Err(DomainError::Conflict { entity: EntityKind::Task, reason }) if reason == "archived tasks cannot be closed"
+        ));
+    }
 }

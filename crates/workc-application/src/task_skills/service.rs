@@ -10,13 +10,12 @@ use workc_domain::task::{
 };
 
 use crate::error::ApplicationError;
-use crate::ports::{Clock, PrepareStatusRecord, SkillRuntime};
+use crate::ports::Clock;
 
 use super::dtos::{
-    CheckSkillUpdatesQuery, MountSkillCommand, OverrideSkillCommand, PrepareSkillCommand,
-    PrepareStatusQuery, SandboxSkillCommand, SkillMountSummary, SkillPreparation,
-    SkillSandboxHandle, SkillUpdateStatus, SkillUseExecution, UnmountSkillCommand,
-    UpdateSkillCommand, UseSkillCommand,
+    CheckSkillUpdatesQuery, MountSkillCommand, OverrideSkillCommand, SandboxSkillCommand,
+    SkillMountSummary, SkillSandboxHandle, SkillUpdateStatus, UnmountSkillCommand,
+    UpdateSkillCommand,
 };
 
 pub trait TaskSkillsApplicationService {
@@ -26,7 +25,7 @@ pub trait TaskSkillsApplicationService {
     ) -> Result<SkillMountSummary, ApplicationError>;
     fn list_mounts(
         &self,
-        task_id: &workc_domain::shared::TaskSlug,
+        slug: &TaskSlug,
     ) -> Result<Vec<SkillMountSummary>, ApplicationError>;
     fn unmount_skill(&self, command: UnmountSkillCommand) -> Result<(), ApplicationError>;
     fn override_skill(&self, command: OverrideSkillCommand) -> Result<(), ApplicationError>;
@@ -42,15 +41,6 @@ pub trait TaskSkillsApplicationService {
         &self,
         command: SandboxSkillCommand,
     ) -> Result<SkillSandboxHandle, ApplicationError>;
-    fn prepare_skill(
-        &self,
-        command: PrepareSkillCommand,
-    ) -> Result<SkillPreparation, ApplicationError>;
-    fn use_skill(&self, command: UseSkillCommand) -> Result<SkillUseExecution, ApplicationError>;
-    fn get_prepare_status(
-        &self,
-        query: PrepareStatusQuery,
-    ) -> Result<PrepareStatusRecord, ApplicationError>;
 }
 
 pub struct DefaultTaskSkillsApplicationService {
@@ -58,7 +48,6 @@ pub struct DefaultTaskSkillsApplicationService {
     mounts: Box<dyn TaskSkillMountRepository>,
     registry: Box<dyn SkillRegistryRepository>,
     clock: Box<dyn Clock>,
-    runtime: Option<Box<dyn SkillRuntime>>,
 }
 
 impl DefaultTaskSkillsApplicationService {
@@ -67,14 +56,12 @@ impl DefaultTaskSkillsApplicationService {
         mounts: Box<dyn TaskSkillMountRepository>,
         registry: Box<dyn SkillRegistryRepository>,
         clock: Box<dyn Clock>,
-        runtime: Option<Box<dyn SkillRuntime>>,
     ) -> Self {
         Self {
             tasks,
             mounts,
             registry,
             clock,
-            runtime,
         }
     }
 
@@ -256,83 +243,6 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
             path: Self::mount_path(&task_id, &mount_id),
         })
     }
-
-    fn prepare_skill(
-        &self,
-        command: PrepareSkillCommand,
-    ) -> Result<SkillPreparation, ApplicationError> {
-        let task_id = TaskSlug::from(command.task_id.as_str());
-        let mount_id = MountId::from(command.mount_id.as_str());
-        let path = Self::mount_path(&task_id, &mount_id);
-        let runtime = self
-            .runtime
-            .as_ref()
-            .ok_or(ApplicationError::AdapterUnavailable("skill prepare"))?;
-        let result = runtime
-            .prepare(
-                path.as_path(),
-                workc_domain::skill_registry::PrepareStep {
-                    name: command.step.name,
-                    action_id: command.step.action_id,
-                },
-            )
-            .map_err(|error| ApplicationError::ExternalFailure {
-                port: "skill-runtime",
-                detail: error.to_string(),
-            })?;
-        Ok(SkillPreparation {
-            mount_id: mount_id.to_string(),
-            status: result.status,
-            artifact_path: result.artifact_path,
-            log_path: result.log_path,
-        })
-    }
-
-    fn use_skill(&self, command: UseSkillCommand) -> Result<SkillUseExecution, ApplicationError> {
-        let task_id = TaskSlug::from(command.task_id.as_str());
-        let mount_id = MountId::from(command.mount_id.as_str());
-        let path = Self::mount_path(&task_id, &mount_id);
-        let runtime = self
-            .runtime
-            .as_ref()
-            .ok_or(ApplicationError::AdapterUnavailable("skill use"))?;
-        let result = runtime
-            .use_skill(
-                path.as_path(),
-                workc_domain::skill_registry::UseStep {
-                    name: command.step.name,
-                    action_id: command.step.action_id,
-                },
-            )
-            .map_err(|error| ApplicationError::ExternalFailure {
-                port: "skill-runtime",
-                detail: error.to_string(),
-            })?;
-        Ok(SkillUseExecution {
-            mount_id: mount_id.to_string(),
-            status: result.status,
-            log_path: result.log_path,
-        })
-    }
-
-    fn get_prepare_status(
-        &self,
-        query: PrepareStatusQuery,
-    ) -> Result<PrepareStatusRecord, ApplicationError> {
-        let task_id = TaskSlug::from(query.task_id.as_str());
-        let mount_id = MountId::from(query.mount_id.as_str());
-        let path = Self::mount_path(&task_id, &mount_id);
-        let runtime = self
-            .runtime
-            .as_ref()
-            .ok_or(ApplicationError::AdapterUnavailable("skill prepare-status"))?;
-        runtime
-            .check_prepare_status(path.as_path())
-            .map_err(|error| ApplicationError::ExternalFailure {
-                port: "skill-runtime",
-                detail: error.to_string(),
-            })
-    }
 }
 
 #[cfg(test)]
@@ -340,21 +250,18 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::BTreeMap;
 
-    use camino::Utf8Path;
     use time::OffsetDateTime;
-    
-use workc_domain::errors::{DomainError, EntityKind};
+    use workc_domain::errors::DomainError;
     use workc_domain::shared::{MountId, SkillId, SkillSourceId, SkillVersion, TaskSlug};
     use workc_domain::skill_registry::{
-        PrepareResult, PrepareStep, SkillDefinition, SkillExecutionStatus, SkillRegistry,
-        SkillRegistryRepository, SkillSource, UseResult, UseStep,
+        SkillDefinition, SkillRegistry, SkillRegistryRepository, SkillSource,
     };
     use workc_domain::task::{
         TaskActivity, TaskMeta, TaskPaths, TaskRepoSelection, TaskRepository, TaskSkillMount,
         TaskSkillMountRepository, TaskStatus, TaskWorkspace,
     };
 
-    use crate::ports::{Clock, PrepareStatusRecord, RuntimeError, SkillRuntime};
+    use crate::ports::Clock;
 
     use super::*;
 
@@ -364,8 +271,6 @@ use workc_domain::errors::{DomainError, EntityKind};
     }
 
     impl TaskRepository for InMemoryTaskRepository {
-        
-
         fn find(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
             Ok(self
                 .tasks
@@ -465,47 +370,6 @@ use workc_domain::errors::{DomainError, EntityKind};
         }
     }
 
-    struct StubSkillRuntime;
-
-    impl SkillRuntime for StubSkillRuntime {
-        fn prepare(
-            &self,
-            _mount_path: &Utf8Path,
-            _step: PrepareStep,
-        ) -> Result<PrepareResult, RuntimeError> {
-            Ok(PrepareResult {
-                status: SkillExecutionStatus::Success,
-                artifact_path: Some("artifact".into()),
-                log_path: Some("log".into()),
-                finished_at: Some(OffsetDateTime::UNIX_EPOCH),
-            })
-        }
-
-        fn use_skill(
-            &self,
-            _mount_path: &Utf8Path,
-            _step: UseStep,
-        ) -> Result<UseResult, RuntimeError> {
-            Ok(UseResult {
-                status: SkillExecutionStatus::Success,
-                log_path: Some("log".into()),
-                finished_at: Some(OffsetDateTime::UNIX_EPOCH),
-            })
-        }
-
-        fn check_prepare_status(
-            &self,
-            _mount_path: &Utf8Path,
-        ) -> Result<PrepareStatusRecord, RuntimeError> {
-            Ok(PrepareStatusRecord {
-                status: SkillExecutionStatus::Success,
-                last_run_at: Some(OffsetDateTime::UNIX_EPOCH),
-                artifact_path: Some("artifact".into()),
-                log_path: Some("log".into()),
-            })
-        }
-    }
-
     fn sample_task() -> TaskWorkspace {
         TaskWorkspace {
             meta: TaskMeta {
@@ -537,7 +401,7 @@ use workc_domain::errors::{DomainError, EntityKind};
         }
     }
 
-    fn service_with_runtime() -> DefaultTaskSkillsApplicationService {
+    fn service() -> DefaultTaskSkillsApplicationService {
         let tasks = InMemoryTaskRepository::default();
         tasks.save(&sample_task()).unwrap();
         let registry = InMemorySkillRegistryRepository::default();
@@ -552,32 +416,12 @@ use workc_domain::errors::{DomainError, EntityKind};
             Box::new(InMemoryTaskSkillMountRepository::default()),
             Box::new(registry),
             Box::new(FixedClock),
-            Some(Box::new(StubSkillRuntime)),
-        )
-    }
-
-    fn service_without_runtime() -> DefaultTaskSkillsApplicationService {
-        let tasks = InMemoryTaskRepository::default();
-        tasks.save(&sample_task()).unwrap();
-        let registry = InMemorySkillRegistryRepository::default();
-        registry.registry.borrow_mut().skills.push(SkillDefinition {
-            id: SkillId::from("frontend-testing"),
-            source: SkillSourceId::from("frontend-toolkit"),
-            versions: vec![SkillVersion::from("2026-05-22")],
-            latest: Some(SkillVersion::from("2026-05-22")),
-        });
-        DefaultTaskSkillsApplicationService::new(
-            Box::new(tasks),
-            Box::new(InMemoryTaskSkillMountRepository::default()),
-            Box::new(registry),
-            Box::new(FixedClock),
-            None,
         )
     }
 
     #[test]
     fn mount_skill_creates_mount_with_latest_version() {
-        let svc = service_without_runtime();
+        let svc = service();
         let summary = svc
             .mount_skill(MountSkillCommand {
                 task_id: "auth-fix".to_owned(),
@@ -594,7 +438,7 @@ use workc_domain::errors::{DomainError, EntityKind};
 
     #[test]
     fn mount_skill_fails_for_missing_skill() {
-        let svc = service_without_runtime();
+        let svc = service();
         let result = svc.mount_skill(MountSkillCommand {
             task_id: "auth-fix".to_owned(),
             skill_id: "nonexistent".to_owned(),
@@ -619,7 +463,6 @@ use workc_domain::errors::{DomainError, EntityKind};
             Box::new(InMemoryTaskSkillMountRepository::default()),
             Box::new(registry),
             Box::new(FixedClock),
-            None,
         );
 
         let result = svc.mount_skill(MountSkillCommand {
@@ -632,7 +475,7 @@ use workc_domain::errors::{DomainError, EntityKind};
 
     #[test]
     fn list_mounts_returns_empty_initially() {
-        let svc = service_without_runtime();
+        let svc = service();
         let mounts = svc
             .list_mounts(&TaskSlug::from("auth-fix"))
             .unwrap();
@@ -641,7 +484,7 @@ use workc_domain::errors::{DomainError, EntityKind};
 
     #[test]
     fn unmount_skill_removes_mount() {
-        let svc = service_without_runtime();
+        let svc = service();
         let summary = svc
             .mount_skill(MountSkillCommand {
                 task_id: "auth-fix".to_owned(),
@@ -664,7 +507,7 @@ use workc_domain::errors::{DomainError, EntityKind};
 
     #[test]
     fn override_skill_returns_adapter_unavailable() {
-        let svc = service_without_runtime();
+        let svc = service();
         let result = svc.override_skill(OverrideSkillCommand {
             task_id: "task-x".to_owned(),
             mount_id: "m1".to_owned(),
@@ -678,7 +521,7 @@ use workc_domain::errors::{DomainError, EntityKind};
 
     #[test]
     fn check_skill_updates_detects_update_available() {
-        let svc = service_without_runtime();
+        let svc = service();
         svc.mount_skill(MountSkillCommand {
             task_id: "auth-fix".to_owned(),
             skill_id: "frontend-testing".to_owned(),
@@ -699,7 +542,7 @@ use workc_domain::errors::{DomainError, EntityKind};
 
     #[test]
     fn check_skill_updates_no_update_when_already_latest() {
-        let svc = service_without_runtime();
+        let svc = service();
         svc.mount_skill(MountSkillCommand {
             task_id: "auth-fix".to_owned(),
             skill_id: "frontend-testing".to_owned(),
@@ -719,7 +562,7 @@ use workc_domain::errors::{DomainError, EntityKind};
 
     #[test]
     fn update_skill_changes_version_to_latest() {
-        let svc = service_without_runtime();
+        let svc = service();
         let summary = svc.mount_skill(MountSkillCommand {
             task_id: "auth-fix".to_owned(),
             skill_id: "frontend-testing".to_owned(),
@@ -739,7 +582,7 @@ use workc_domain::errors::{DomainError, EntityKind};
 
     #[test]
     fn update_skill_fails_for_missing_mount() {
-        let svc = service_without_runtime();
+        let svc = service();
         let result = svc.update_skill(UpdateSkillCommand {
             task_id: "auth-fix".to_owned(),
             mount_id: "mount-999".to_owned(),
@@ -749,7 +592,7 @@ use workc_domain::errors::{DomainError, EntityKind};
 
     #[test]
     fn sandbox_skill_returns_handle() {
-        let svc = service_without_runtime();
+        let svc = service();
         let handle = svc
             .sandbox_skill(SandboxSkillCommand {
                 task_id: "auth-fix".to_owned(),
@@ -759,103 +602,5 @@ use workc_domain::errors::{DomainError, EntityKind};
 
         assert_eq!(handle.mount_id, "mount-001");
         assert!(handle.path.as_str().contains("mount-001"));
-    }
-
-    #[test]
-    fn prepare_skill_with_runtime() {
-        let svc = service_with_runtime();
-        let result = svc
-            .prepare_skill(PrepareSkillCommand {
-                task_id: "auth-fix".to_owned(),
-                mount_id: "mount-001".to_owned(),
-                step: super::super::dtos::RuntimeStep {
-                    name: "install".to_owned(),
-                    action_id: "npm-install".to_owned(),
-                },
-            })
-            .unwrap();
-
-        assert!(result.status == SkillExecutionStatus::Success);
-        assert!(result.artifact_path.is_some());
-        assert!(result.log_path.is_some());
-    }
-
-    #[test]
-    fn prepare_skill_fails_without_runtime() {
-        let svc = service_without_runtime();
-        let result = svc.prepare_skill(PrepareSkillCommand {
-            task_id: "auth-fix".to_owned(),
-            mount_id: "mount-001".to_owned(),
-            step: super::super::dtos::RuntimeStep {
-                name: "install".to_owned(),
-                action_id: "npm-install".to_owned(),
-            },
-        });
-        assert!(matches!(
-            result,
-            Err(ApplicationError::AdapterUnavailable(..))
-        ));
-    }
-
-    #[test]
-    fn use_skill_with_runtime() {
-        let svc = service_with_runtime();
-        let result = svc
-            .use_skill(UseSkillCommand {
-                task_id: "auth-fix".to_owned(),
-                mount_id: "mount-001".to_owned(),
-                step: super::super::dtos::RuntimeStep {
-                    name: "lint".to_owned(),
-                    action_id: "eslint".to_owned(),
-                },
-            })
-            .unwrap();
-
-        assert!(result.status == SkillExecutionStatus::Success);
-        assert!(result.log_path.is_some());
-    }
-
-    #[test]
-    fn use_skill_fails_without_runtime() {
-        let svc = service_without_runtime();
-        let result = svc.use_skill(UseSkillCommand {
-            task_id: "auth-fix".to_owned(),
-            mount_id: "mount-001".to_owned(),
-            step: super::super::dtos::RuntimeStep {
-                name: "lint".to_owned(),
-                action_id: "eslint".to_owned(),
-            },
-        });
-        assert!(matches!(
-            result,
-            Err(ApplicationError::AdapterUnavailable(..))
-        ));
-    }
-
-    #[test]
-    fn get_prepare_status_with_runtime() {
-        let svc = service_with_runtime();
-        let result = svc
-            .get_prepare_status(PrepareStatusQuery {
-                task_id: "auth-fix".to_owned(),
-                mount_id: "mount-001".to_owned(),
-            })
-            .unwrap();
-
-        assert_eq!(result.status, SkillExecutionStatus::Success);
-        assert!(result.artifact_path.is_some());
-    }
-
-    #[test]
-    fn get_prepare_status_fails_without_runtime() {
-        let svc = service_without_runtime();
-        let result = svc.get_prepare_status(PrepareStatusQuery {
-            task_id: "auth-fix".to_owned(),
-            mount_id: "mount-001".to_owned(),
-        });
-        assert!(matches!(
-            result,
-            Err(ApplicationError::AdapterUnavailable(..))
-        ));
     }
 }

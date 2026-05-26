@@ -25,3 +25,23 @@ impl Display for TaskSkillMountStatus {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_active() {
+        assert_eq!(TaskSkillMountStatus::Active.to_string(), "active");
+    }
+
+    #[test]
+    fn display_inactive() {
+        assert_eq!(TaskSkillMountStatus::Inactive.to_string(), "inactive");
+    }
+
+    #[test]
+    fn display_removed() {
+        assert_eq!(TaskSkillMountStatus::Removed.to_string(), "removed");
+    }
+}

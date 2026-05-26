@@ -100,7 +100,6 @@ fn task_skill_service() -> Result<DefaultTaskSkillsApplicationService> {
         Box::new(FsTaskSkillMountRepository::new(workspace_root.clone())),
         Box::new(FsSkillRegistryRepository::new()),
         Box::new(SystemClock),
-        None,
     ))
 }
 

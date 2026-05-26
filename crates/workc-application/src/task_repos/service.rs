@@ -919,4 +919,26 @@ mod tests {
             matches!(result, Err(ApplicationError::Domain(DomainError::NotFound { entity, .. })) if entity == EntityKind::RepoGroup)
         );
     }
+
+    #[test]
+    fn set_task_repos_fails_for_unknown_task() {
+        let tasks = InMemoryTaskRepository::default();
+        let service = DefaultTaskReposApplicationService::new(
+            Box::new(tasks),
+            Box::new(InMemoryRepoCatalogRepository {
+                catalog: RefCell::new(sample_catalog()),
+            }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
+            Box::new(RecordingGitClient),
+        );
+
+        let result = service.set_task_repos(SetTaskReposCommand {
+            task_id: "nonexistent".to_owned(),
+            selected_repo_groups: vec![],
+            repos: vec![],
+        });
+        assert!(result.is_err());
+    }
 }
