@@ -155,15 +155,12 @@ impl TaskApplicationService for DefaultTaskApplicationService {
 
     fn close_task(&self, command: CloseTaskCommand) -> Result<(), ApplicationError> {
         let slug = TaskSlug::from(command.task_id.as_str());
-        let mut task = self
-            .tasks
-            .find(&slug)?
-            .ok_or_else(|| {
-                ApplicationError::Domain(DomainError::NotFound {
-                    entity: EntityKind::Task,
-                    slug: command.task_id.clone(),
-                })
-            })?;
+        let mut task = self.tasks.find(&slug)?.ok_or_else(|| {
+            ApplicationError::Domain(DomainError::NotFound {
+                entity: EntityKind::Task,
+                slug: command.task_id.clone(),
+            })
+        })?;
         task.close(self.clock.now())?;
         self.tasks.save(&task)?;
         Ok(())
@@ -545,7 +542,9 @@ mod tests {
                     "vscode" => "vscode",
                     _ => "other",
                 };
-                self.0.borrow_mut().push((path.to_path_buf(), name.to_owned()));
+                self.0
+                    .borrow_mut()
+                    .push((path.to_path_buf(), name.to_owned()));
                 Ok(())
             }
         }
@@ -553,7 +552,9 @@ mod tests {
         let svc = DefaultTaskApplicationService::new(
             Utf8PathBuf::from("/workspace"),
             Box::new(repo),
-            Box::new(FixedClock { now: OffsetDateTime::UNIX_EPOCH }),
+            Box::new(FixedClock {
+                now: OffsetDateTime::UNIX_EPOCH,
+            }),
             Box::new(Capture(calls)),
         );
 
@@ -568,17 +569,41 @@ mod tests {
 
     #[test]
     fn to_domain_status_converts_all_variants() {
-        assert_eq!(to_domain_status(&ApplicationTaskStatus::Draft), TaskStatus::Draft);
-        assert_eq!(to_domain_status(&ApplicationTaskStatus::Active), TaskStatus::Active);
-        assert_eq!(to_domain_status(&ApplicationTaskStatus::Closed), TaskStatus::Closed);
-        assert_eq!(to_domain_status(&ApplicationTaskStatus::Archived), TaskStatus::Archived);
+        assert_eq!(
+            to_domain_status(&ApplicationTaskStatus::Draft),
+            TaskStatus::Draft
+        );
+        assert_eq!(
+            to_domain_status(&ApplicationTaskStatus::Active),
+            TaskStatus::Active
+        );
+        assert_eq!(
+            to_domain_status(&ApplicationTaskStatus::Closed),
+            TaskStatus::Closed
+        );
+        assert_eq!(
+            to_domain_status(&ApplicationTaskStatus::Archived),
+            TaskStatus::Archived
+        );
     }
 
     #[test]
     fn from_domain_status_converts_all_variants() {
-        assert_eq!(from_domain_status(TaskStatus::Draft), ApplicationTaskStatus::Draft);
-        assert_eq!(from_domain_status(TaskStatus::Active), ApplicationTaskStatus::Active);
-        assert_eq!(from_domain_status(TaskStatus::Closed), ApplicationTaskStatus::Closed);
-        assert_eq!(from_domain_status(TaskStatus::Archived), ApplicationTaskStatus::Archived);
+        assert_eq!(
+            from_domain_status(TaskStatus::Draft),
+            ApplicationTaskStatus::Draft
+        );
+        assert_eq!(
+            from_domain_status(TaskStatus::Active),
+            ApplicationTaskStatus::Active
+        );
+        assert_eq!(
+            from_domain_status(TaskStatus::Closed),
+            ApplicationTaskStatus::Closed
+        );
+        assert_eq!(
+            from_domain_status(TaskStatus::Archived),
+            ApplicationTaskStatus::Archived
+        );
     }
 }

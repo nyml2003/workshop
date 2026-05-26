@@ -140,7 +140,9 @@ mod tests {
             None,
             vec![],
         );
-        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Slug));
+        assert!(
+            matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Slug)
+        );
     }
 
     #[test]
@@ -153,7 +155,9 @@ mod tests {
             None,
             vec![],
         );
-        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Title));
+        assert!(
+            matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Title)
+        );
     }
 
     #[test]
@@ -166,7 +170,9 @@ mod tests {
             None,
             vec![],
         );
-        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Title));
+        assert!(
+            matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Title)
+        );
     }
 
     #[test]
@@ -194,7 +200,9 @@ mod tests {
             None,
             vec!["rust".to_owned(), "".to_owned(), "cli".to_owned()],
         );
-        assert!(matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Tags));
+        assert!(
+            matches!(result, Err(DomainError::InvalidInput { field, .. }) if field == FieldKind::Tags)
+        );
     }
 
     #[test]

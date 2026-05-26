@@ -13,8 +13,8 @@ use workc_infrastructure::fs::{FsRepoCatalogRepository, FsTaskRepository};
 use workc_infrastructure::git::command_git_client::CommandGitClient;
 use workc_infrastructure::time::system_clock::SystemClock;
 
+use super::context::CliContext;
 use crate::presenters::Presenter;
-use super::shared::workspace_root;
 
 #[derive(Subcommand, Debug)]
 pub enum RepoCommand {
@@ -108,18 +108,19 @@ pub enum CloneStateArg {
     Unknown,
 }
 
-
-fn repo_catalog_service() -> Result<DefaultRepoCatalogApplicationService> {
+fn repo_catalog_service(ctx: &CliContext) -> Result<DefaultRepoCatalogApplicationService> {
     Ok(DefaultRepoCatalogApplicationService::new(Box::new(
-        FsRepoCatalogRepository::new(),
+        FsRepoCatalogRepository::new(ctx.fs.clone_box()),
     )))
 }
 
-fn task_repos_service() -> Result<DefaultTaskReposApplicationService> {
-    let workspace_root = workspace_root()?;
+fn task_repos_service(ctx: &CliContext) -> Result<DefaultTaskReposApplicationService> {
     Ok(DefaultTaskReposApplicationService::new(
-        Box::new(FsTaskRepository::new(workspace_root.clone())),
-        Box::new(FsRepoCatalogRepository::new()),
+        Box::new(FsTaskRepository::new(
+            ctx.workspace_root.clone(),
+            ctx.fs.clone_box(),
+        )),
+        Box::new(FsRepoCatalogRepository::new(ctx.fs.clone_box())),
         Box::new(SystemClock),
         Box::new(CommandGitClient),
     ))
@@ -134,8 +135,12 @@ fn to_clone_state_filter(value: CloneStateArg) -> CloneStateFilter {
     }
 }
 
-pub fn run_repo(command: RepoCommand, presenter: &dyn Presenter) -> Result<String> {
-    let service = repo_catalog_service()?;
+pub fn run_repo(
+    command: RepoCommand,
+    presenter: &dyn Presenter,
+    ctx: &CliContext,
+) -> Result<String> {
+    let service = repo_catalog_service(ctx)?;
     match command {
         RepoCommand::Add(args) => {
             let repo = service.add_repo(AddRepoCommand {
@@ -153,8 +158,12 @@ pub fn run_repo(command: RepoCommand, presenter: &dyn Presenter) -> Result<Strin
     }
 }
 
-pub fn run_repo_group(command: RepoGroupCommand, presenter: &dyn Presenter) -> Result<String> {
-    let service = repo_catalog_service()?;
+pub fn run_repo_group(
+    command: RepoGroupCommand,
+    presenter: &dyn Presenter,
+    ctx: &CliContext,
+) -> Result<String> {
+    let service = repo_catalog_service(ctx)?;
     match command {
         RepoGroupCommand::Add(args) => {
             let group = service.add_repo_group(AddRepoGroupCommand {
@@ -177,8 +186,12 @@ pub fn run_repo_group(command: RepoGroupCommand, presenter: &dyn Presenter) -> R
     }
 }
 
-pub fn run_task_repos(command: TaskReposCommand, presenter: &dyn Presenter) -> Result<String> {
-    let service = task_repos_service()?;
+pub fn run_task_repos(
+    command: TaskReposCommand,
+    presenter: &dyn Presenter,
+    ctx: &CliContext,
+) -> Result<String> {
+    let service = task_repos_service(ctx)?;
     let result = match command {
         TaskReposCommand::Set(args) => service.set_task_repos(SetTaskReposCommand {
             task_id: args.task,
@@ -215,5 +228,3 @@ pub fn run_task_repos(command: TaskReposCommand, presenter: &dyn Presenter) -> R
 
     Ok(presenter.render_task_repos_result(&result))
 }
-
-

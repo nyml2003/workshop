@@ -7,7 +7,8 @@ use super::entities::{KnowledgeCandidate, KnowledgeEntry};
 pub trait KnowledgeRepository {
     fn load(&self) -> Result<KnowledgeBase, DomainError>;
     fn save(&self, knowledge_base: &KnowledgeBase) -> Result<(), DomainError>;
-    fn list_candidates(&self, task_slug: &TaskSlug) -> Result<Vec<KnowledgeCandidate>, DomainError>;
+    fn list_candidates(&self, task_slug: &TaskSlug)
+    -> Result<Vec<KnowledgeCandidate>, DomainError>;
     fn create_candidate(&self, candidate: &KnowledgeCandidate) -> Result<(), DomainError>;
     fn update_candidate(
         &self,

@@ -1,6 +1,6 @@
 use crate::error::ApplicationError;
-use workc_domain::errors::EntityKind;
 use workc_domain::errors::DomainError;
+use workc_domain::errors::EntityKind;
 use workc_domain::knowledge::{KnowledgeEntry, KnowledgeRepository, KnowledgeSourceRef};
 use workc_domain::shared::{KnowledgeCandidateId, KnowledgeId, TaskSlug};
 
@@ -292,8 +292,8 @@ mod tests {
 
     use camino::Utf8PathBuf;
     use time::OffsetDateTime;
+    use workc_domain::errors::DomainError;
     use workc_domain::errors::EntityKind;
-use workc_domain::errors::DomainError;
     use workc_domain::knowledge::{
         KnowledgeBase, KnowledgeCandidate, KnowledgeEntry, KnowledgeRepository,
     };
@@ -327,10 +327,7 @@ use workc_domain::errors::DomainError;
             Ok(())
         }
 
-        fn list_candidates(
-            &self,
-            slug: &TaskSlug,
-        ) -> Result<Vec<KnowledgeCandidate>, DomainError> {
+        fn list_candidates(&self, slug: &TaskSlug) -> Result<Vec<KnowledgeCandidate>, DomainError> {
             let prefix = slug.to_string();
             Ok(self
                 .candidates
@@ -408,12 +405,12 @@ use workc_domain::errors::DomainError;
             candidate_id: &KnowledgeCandidateId,
             knowledge_id: &KnowledgeId,
         ) -> Result<(), DomainError> {
-            let candidate = self.find_candidate(slug, candidate_id)?.ok_or_else(|| {
-                DomainError::NotFound {
-                    entity: EntityKind::KnowledgeCandidate,
-                    slug: candidate_id.to_string(),
-                }
-            })?;
+            let candidate =
+                self.find_candidate(slug, candidate_id)?
+                    .ok_or_else(|| DomainError::NotFound {
+                        entity: EntityKind::KnowledgeCandidate,
+                        slug: candidate_id.to_string(),
+                    })?;
             let entry = KnowledgeEntry {
                 id: knowledge_id.clone(),
                 title: candidate.title,
@@ -713,7 +710,7 @@ use workc_domain::errors::DomainError;
 
     #[test]
     fn update_knowledge_meta_changes_title_category_tags() {
-        let svc = service();
+        let _ = service();
         let repo = InMemoryKnowledgeRepository::new();
         let entry = KnowledgeEntry {
             id: KnowledgeId::from("k-existing"),

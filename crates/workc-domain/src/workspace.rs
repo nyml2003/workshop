@@ -63,17 +63,26 @@ mod tests {
 
     #[test]
     fn parse_active() {
-        assert_eq!(WorkspaceStatus::parse("active"), Some(WorkspaceStatus::Active));
+        assert_eq!(
+            WorkspaceStatus::parse("active"),
+            Some(WorkspaceStatus::Active)
+        );
     }
 
     #[test]
     fn parse_closed() {
-        assert_eq!(WorkspaceStatus::parse("closed"), Some(WorkspaceStatus::Closed));
+        assert_eq!(
+            WorkspaceStatus::parse("closed"),
+            Some(WorkspaceStatus::Closed)
+        );
     }
 
     #[test]
     fn parse_archived() {
-        assert_eq!(WorkspaceStatus::parse("archived"), Some(WorkspaceStatus::Archived));
+        assert_eq!(
+            WorkspaceStatus::parse("archived"),
+            Some(WorkspaceStatus::Archived)
+        );
     }
 
     #[test]

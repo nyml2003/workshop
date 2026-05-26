@@ -117,9 +117,6 @@ mod tests {
             operation: "write",
             detail: "disk full".to_owned(),
         };
-        assert_eq!(
-            err.to_string(),
-            "persistence error during write: disk full"
-        );
+        assert_eq!(err.to_string(), "persistence error during write: disk full");
     }
 }

@@ -16,9 +16,19 @@ impl WindowsEditorLauncher {
     }
 }
 
+impl Default for WindowsEditorLauncher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EditorLauncher for WindowsEditorLauncher {
     fn open_dir(&self, path: &Utf8Path, editor: &str) -> Result<(), EditorError> {
-        let cmd = self.registry.find(editor).map(|e| e.launch_cmd()).unwrap_or(editor);
+        let cmd = self
+            .registry
+            .find(editor)
+            .map(|e| e.launch_cmd())
+            .unwrap_or(editor);
         let exe = resolve_windows_command(cmd)?;
 
         Command::new(exe)

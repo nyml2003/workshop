@@ -23,10 +23,7 @@ pub trait TaskSkillsApplicationService {
         &self,
         command: MountSkillCommand,
     ) -> Result<SkillMountSummary, ApplicationError>;
-    fn list_mounts(
-        &self,
-        slug: &TaskSlug,
-    ) -> Result<Vec<SkillMountSummary>, ApplicationError>;
+    fn list_mounts(&self, slug: &TaskSlug) -> Result<Vec<SkillMountSummary>, ApplicationError>;
     fn unmount_skill(&self, command: UnmountSkillCommand) -> Result<(), ApplicationError>;
     fn override_skill(&self, command: OverrideSkillCommand) -> Result<(), ApplicationError>;
     fn check_skill_updates(
@@ -141,10 +138,7 @@ impl TaskSkillsApplicationService for DefaultTaskSkillsApplicationService {
         Ok(Self::to_summary(&task.meta.slug, mount))
     }
 
-    fn list_mounts(
-        &self,
-        slug: &TaskSlug,
-    ) -> Result<Vec<SkillMountSummary>, ApplicationError> {
+    fn list_mounts(&self, slug: &TaskSlug) -> Result<Vec<SkillMountSummary>, ApplicationError> {
         Ok(self
             .mounts
             .list_for_task(slug)?
@@ -476,9 +470,7 @@ mod tests {
     #[test]
     fn list_mounts_returns_empty_initially() {
         let svc = service();
-        let mounts = svc
-            .list_mounts(&TaskSlug::from("auth-fix"))
-            .unwrap();
+        let mounts = svc.list_mounts(&TaskSlug::from("auth-fix")).unwrap();
         assert!(mounts.is_empty());
     }
 
@@ -499,9 +491,7 @@ mod tests {
         })
         .unwrap();
 
-        let mounts = svc
-            .list_mounts(&TaskSlug::from("auth-fix"))
-            .unwrap();
+        let mounts = svc.list_mounts(&TaskSlug::from("auth-fix")).unwrap();
         assert!(mounts.is_empty());
     }
 
@@ -537,7 +527,10 @@ mod tests {
             .unwrap();
         assert_eq!(updates.len(), 1);
         assert!(updates[0].update_available);
-        assert_eq!(updates[0].target_version.as_ref().map(|v| v.as_str()), Some("2026-05-22"));
+        assert_eq!(
+            updates[0].target_version.as_ref().map(|v| v.as_str()),
+            Some("2026-05-22")
+        );
     }
 
     #[test]
@@ -563,12 +556,13 @@ mod tests {
     #[test]
     fn update_skill_changes_version_to_latest() {
         let svc = service();
-        let summary = svc.mount_skill(MountSkillCommand {
-            task_id: "auth-fix".to_owned(),
-            skill_id: "frontend-testing".to_owned(),
-            version: Some("2026-05-20".to_owned()),
-        })
-        .unwrap();
+        let summary = svc
+            .mount_skill(MountSkillCommand {
+                task_id: "auth-fix".to_owned(),
+                skill_id: "frontend-testing".to_owned(),
+                version: Some("2026-05-20".to_owned()),
+            })
+            .unwrap();
 
         let updated = svc
             .update_skill(UpdateSkillCommand {

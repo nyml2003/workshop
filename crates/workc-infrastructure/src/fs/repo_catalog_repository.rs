@@ -1,14 +1,16 @@
-use std::fs;
-
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 use workc_domain::errors::{DomainError, FieldKind};
 use workc_domain::repo_catalog::{RepoCatalog, RepoCatalogRepository, RepoEntry, RepoGroup};
 use workc_domain::shared::{RepoGroupId, RepoId};
 
+use crate::fs::file_system::FileSystem;
+
 use super::paths;
 
-pub struct FsRepoCatalogRepository;
+pub struct FsRepoCatalogRepository {
+    fs: Box<dyn FileSystem>,
+}
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct CatalogToml {
@@ -42,14 +44,16 @@ struct CatalogRepoGroup {
 }
 
 impl FsRepoCatalogRepository {
-    pub fn new() -> Self {
-        Self
+    pub fn new(fs: Box<dyn FileSystem>) -> Self {
+        Self { fs }
     }
 }
 
 impl Default for FsRepoCatalogRepository {
     fn default() -> Self {
-        Self
+        Self {
+            fs: Box::new(crate::fs::real_fs::RealFileSystem),
+        }
     }
 }
 
@@ -70,16 +74,18 @@ impl FsRepoCatalogRepository {
 impl RepoCatalogRepository for FsRepoCatalogRepository {
     fn load(&self) -> Result<RepoCatalog, DomainError> {
         let root = Self::repos_root();
-        if !root.exists() {
+        if !self.fs.exists(&root) {
             return Ok(RepoCatalog {
                 repos: Vec::new(),
                 groups: Vec::new(),
             });
         }
 
-        let repos = if Self::catalog_path().exists() {
-            let raw =
-                fs::read_to_string(Self::catalog_path()).map_err(io_error("read repo catalog"))?;
+        let repos = if self.fs.exists(&Self::catalog_path()) {
+            let raw = self
+                .fs
+                .read_to_string(&Self::catalog_path())
+                .map_err(io_error("read repo catalog"))?;
             toml::from_str::<CatalogToml>(&raw)
                 .map_err(invalid_toml("catalog.toml"))?
                 .repos
@@ -95,9 +101,11 @@ impl RepoCatalogRepository for FsRepoCatalogRepository {
             Vec::new()
         };
 
-        let groups = if Self::groups_path().exists() {
-            let raw =
-                fs::read_to_string(Self::groups_path()).map_err(io_error("read repo groups"))?;
+        let groups = if self.fs.exists(&Self::groups_path()) {
+            let raw = self
+                .fs
+                .read_to_string(&Self::groups_path())
+                .map_err(io_error("read repo groups"))?;
             toml::from_str::<GroupsToml>(&raw)
                 .map_err(invalid_toml("groups.toml"))?
                 .groups
@@ -117,7 +125,9 @@ impl RepoCatalogRepository for FsRepoCatalogRepository {
     }
 
     fn save(&self, catalog: &RepoCatalog) -> Result<(), DomainError> {
-        fs::create_dir_all(Self::repos_root()).map_err(io_error("create repos root"))?;
+        self.fs
+            .create_dir_all(&Self::repos_root())
+            .map_err(io_error("create repos root"))?;
 
         let catalog_toml = CatalogToml {
             repos: catalog
@@ -144,16 +154,19 @@ impl RepoCatalogRepository for FsRepoCatalogRepository {
                 .collect(),
         };
 
-        fs::write(
-            Self::catalog_path(),
-            toml::to_string_pretty(&catalog_toml).map_err(invalid_serialize("catalog.toml"))?,
-        )
-        .map_err(io_error("write repo catalog"))?;
-        fs::write(
-            Self::groups_path(),
-            toml::to_string_pretty(&groups_toml).map_err(invalid_serialize("groups.toml"))?,
-        )
-        .map_err(io_error("write repo groups"))?;
+        self.fs
+            .write(
+                &Self::catalog_path(),
+                &toml::to_string_pretty(&catalog_toml)
+                    .map_err(invalid_serialize("catalog.toml"))?,
+            )
+            .map_err(io_error("write repo catalog"))?;
+        self.fs
+            .write(
+                &Self::groups_path(),
+                &toml::to_string_pretty(&groups_toml).map_err(invalid_serialize("groups.toml"))?,
+            )
+            .map_err(io_error("write repo groups"))?;
         Ok(())
     }
 
@@ -170,17 +183,23 @@ impl RepoCatalogRepository for FsRepoCatalogRepository {
     }
 }
 
-fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError { move |error| DomainError::PersistenceFailed { operation: operation,
+fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {
+    move |error| DomainError::PersistenceFailed {
+        operation,
         detail: error.to_string(),
     }
 }
 
-fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
+fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError {
+    move |error| DomainError::InvalidInput {
+        field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }
 
-fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
+fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError {
+    move |error| DomainError::InvalidInput {
+        field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }
@@ -189,16 +208,18 @@ fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> Domain
 mod tests {
     use workc_domain::repo_catalog::{RepoCatalog, RepoEntry, RepoGroup};
 
+    use crate::fs::real_fs::RealFileSystem;
+
     use super::*;
 
     #[test]
     fn new_constructs_without_args() {
-        let _repository = FsRepoCatalogRepository::new();
+        let _repository = FsRepoCatalogRepository::new(Box::new(RealFileSystem));
     }
 
     #[test]
     fn save_and_load_roundtrip() {
-        let _repository = FsRepoCatalogRepository::new();
+        let _repository = FsRepoCatalogRepository::new(Box::new(RealFileSystem));
         let _catalog = RepoCatalog {
             repos: vec![RepoEntry {
                 id: RepoId::from("auth-service"),
@@ -215,4 +236,3 @@ mod tests {
         };
     }
 }
-

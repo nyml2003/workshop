@@ -18,7 +18,11 @@ impl LinuxEditorLauncher {
 
 impl EditorLauncher for LinuxEditorLauncher {
     fn open_dir(&self, path: &Utf8Path, editor: &str) -> Result<(), EditorError> {
-        let cmd = self.registry.find(editor).map(|e| e.launch_cmd()).unwrap_or(editor);
+        let cmd = self
+            .registry
+            .find(editor)
+            .map(|e| e.launch_cmd())
+            .unwrap_or(editor);
 
         Command::new(cmd)
             .arg(path.as_str())

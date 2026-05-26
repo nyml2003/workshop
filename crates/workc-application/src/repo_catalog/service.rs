@@ -1,5 +1,5 @@
-use workc_domain::errors::EntityKind;
 use workc_domain::errors::DomainError;
+use workc_domain::errors::EntityKind;
 use workc_domain::repo_catalog::{RepoCatalogRepository, RepoEntry, RepoGroup};
 use workc_domain::shared::{RepoGroupId, RepoId};
 

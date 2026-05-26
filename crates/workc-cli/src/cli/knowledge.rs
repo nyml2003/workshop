@@ -10,8 +10,8 @@ use workc_application::knowledge::{
 use workc_infrastructure::fs::knowledge_repository::FsKnowledgeRepository;
 use workc_infrastructure::time::system_clock::SystemClock;
 
+use super::context::CliContext;
 use crate::presenters::Presenter;
-use super::shared::workspace_root;
 
 #[derive(Subcommand, Debug)]
 pub enum KnowledgeCommand {
@@ -112,17 +112,22 @@ pub struct KnowledgePromoteArgs {
     pub tags: Option<Vec<String>>,
 }
 
-
-fn knowledge_service() -> Result<DefaultKnowledgeApplicationService> {
-    let workspace_root = workspace_root()?;
+fn knowledge_service(ctx: &CliContext) -> Result<DefaultKnowledgeApplicationService> {
     Ok(DefaultKnowledgeApplicationService::new(
-        Box::new(FsKnowledgeRepository::new(workspace_root)),
+        Box::new(FsKnowledgeRepository::new(
+            ctx.workspace_root.clone(),
+            ctx.fs.clone_box(),
+        )),
         Box::new(SystemClock),
     ))
 }
 
-pub fn run(command: KnowledgeCommand, presenter: &dyn Presenter) -> Result<String> {
-    let service = knowledge_service()?;
+pub fn run(
+    command: KnowledgeCommand,
+    presenter: &dyn Presenter,
+    ctx: &CliContext,
+) -> Result<String> {
+    let service = knowledge_service(ctx)?;
 
     match command {
         KnowledgeCommand::Candidate { command } => match command {
@@ -211,5 +216,3 @@ pub fn run(command: KnowledgeCommand, presenter: &dyn Presenter) -> Result<Strin
         }
     }
 }
-
-

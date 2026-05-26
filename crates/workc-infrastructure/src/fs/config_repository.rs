@@ -1,12 +1,15 @@
 use serde::{Deserialize, Serialize};
-use std::fs;
 use workc_domain::config::{ConfigRepository, WorkcConfig};
-use workc_domain::errors::FieldKind;
 use workc_domain::errors::DomainError;
+use workc_domain::errors::FieldKind;
+
+use crate::fs::file_system::FileSystem;
 
 use super::paths;
 
-pub struct FsConfigRepository;
+pub struct FsConfigRepository {
+    fs: Box<dyn FileSystem>,
+}
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct ConfigToml {
@@ -20,24 +23,29 @@ struct KnowledgeConfig {
 }
 
 impl FsConfigRepository {
-    pub fn new() -> Self {
-        Self
+    pub fn new(fs: Box<dyn FileSystem>) -> Self {
+        Self { fs }
     }
 }
 
 impl Default for FsConfigRepository {
     fn default() -> Self {
-        Self
+        Self {
+            fs: Box::new(crate::fs::real_fs::RealFileSystem),
+        }
     }
 }
 
 impl ConfigRepository for FsConfigRepository {
     fn load(&self) -> Result<WorkcConfig, DomainError> {
         let path = paths::workc_config_path();
-        if !path.exists() {
+        if !self.fs.exists(&path) {
             return Ok(WorkcConfig::default());
         }
-        let raw = fs::read_to_string(&path).map_err(io_error("read config"))?;
+        let raw = self
+            .fs
+            .read_to_string(&path)
+            .map_err(io_error("read config"))?;
         let config: ConfigToml = toml::from_str(&raw).map_err(invalid_toml("config.toml"))?;
         Ok(WorkcConfig {
             knowledge_remote: config.knowledge.remote,
@@ -50,33 +58,41 @@ impl ConfigRepository for FsConfigRepository {
             field: FieldKind::Other("config path"),
             reason: "no parent directory".to_owned(),
         })?;
-        fs::create_dir_all(parent).map_err(io_error("create workc home"))?;
+        self.fs
+            .create_dir_all(parent)
+            .map_err(io_error("create workc home"))?;
         let toml = ConfigToml {
             knowledge: KnowledgeConfig {
                 remote: config.knowledge_remote.clone(),
             },
         };
-        fs::write(
-            &path,
-            toml::to_string_pretty(&toml).map_err(invalid_serialize("config.toml"))?,
-        )
-        .map_err(io_error("write config"))?;
+        self.fs
+            .write(
+                &path,
+                &toml::to_string_pretty(&toml).map_err(invalid_serialize("config.toml"))?,
+            )
+            .map_err(io_error("write config"))?;
         Ok(())
     }
 }
 
-fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError { move |error| DomainError::PersistenceFailed { operation: operation,
+fn io_error(operation: &'static str) -> impl Fn(std::io::Error) -> DomainError {
+    move |error| DomainError::PersistenceFailed {
+        operation,
         detail: error.to_string(),
     }
 }
 
-fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
+fn invalid_toml(field: &'static str) -> impl Fn(toml::de::Error) -> DomainError {
+    move |error| DomainError::InvalidInput {
+        field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }
 
-fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError { move |error| DomainError::InvalidInput { field: FieldKind::Other(field),
+fn invalid_serialize(field: &'static str) -> impl Fn(toml::ser::Error) -> DomainError {
+    move |error| DomainError::InvalidInput {
+        field: FieldKind::Other(field),
         reason: error.to_string(),
     }
 }
-

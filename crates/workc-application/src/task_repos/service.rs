@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 
 use camino::Utf8PathBuf;
-use workc_domain::errors::EntityKind;
 use workc_domain::errors::DomainError;
+use workc_domain::errors::EntityKind;
 use workc_domain::repo_catalog::RepoCatalogRepository;
 use workc_domain::shared::{RepoGroupId, RepoId, TaskSlug};
 use workc_domain::task::TaskRepository;
@@ -137,8 +137,7 @@ impl DefaultTaskReposApplicationService {
     }
 
     fn task_repo_path(task: &workc_domain::task::TaskWorkspace, repo_id: &RepoId) -> Utf8PathBuf {
-        Utf8PathBuf::from(task.paths.repos_dir.as_str())
-            .join(repo_id.as_str())
+        Utf8PathBuf::from(task.paths.repos_dir.as_str()).join(repo_id.as_str())
     }
 
     fn resolve_clone_targets(
@@ -395,8 +394,6 @@ mod tests {
     }
 
     impl TaskRepository for InMemoryTaskRepository {
-        
-
         fn find(&self, slug: &TaskSlug) -> Result<Option<TaskWorkspace>, DomainError> {
             Ok(self
                 .tasks

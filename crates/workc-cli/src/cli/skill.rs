@@ -1,7 +1,4 @@
-use std::fs;
-
-use anyhow::{Result, anyhow};
-use camino::Utf8PathBuf;
+use anyhow::Result;
 use clap::{Args, Subcommand, ValueEnum};
 use workc_application::skill_registry::{
     ApplicationSkillSourceKind, DefaultSkillRegistryApplicationService, ImportSkillSourceCommand,
@@ -17,8 +14,8 @@ use workc_infrastructure::fs::{
 };
 use workc_infrastructure::time::system_clock::SystemClock;
 
+use super::context::CliContext;
 use crate::presenters::Presenter;
-use super::shared::workspace_root;
 
 #[derive(Subcommand, Debug)]
 pub enum SkillCommand {
@@ -85,20 +82,24 @@ pub enum SkillSourceKindArg {
     Archive,
 }
 
-
-fn registry_service() -> Result<DefaultSkillRegistryApplicationService> {
+fn registry_service(ctx: &CliContext) -> Result<DefaultSkillRegistryApplicationService> {
     Ok(DefaultSkillRegistryApplicationService::new(
-        Box::new(FsSkillRegistryRepository::new()),
+        Box::new(FsSkillRegistryRepository::new(ctx.fs.clone_box())),
         Box::new(SystemClock),
     ))
 }
 
-fn task_skill_service() -> Result<DefaultTaskSkillsApplicationService> {
-    let workspace_root = workspace_root()?;
+fn task_skill_service(ctx: &CliContext) -> Result<DefaultTaskSkillsApplicationService> {
     Ok(DefaultTaskSkillsApplicationService::new(
-        Box::new(FsTaskRepository::new(workspace_root.clone())),
-        Box::new(FsTaskSkillMountRepository::new(workspace_root.clone())),
-        Box::new(FsSkillRegistryRepository::new()),
+        Box::new(FsTaskRepository::new(
+            ctx.workspace_root.clone(),
+            ctx.fs.clone_box(),
+        )),
+        Box::new(FsTaskSkillMountRepository::new(
+            ctx.workspace_root.clone(),
+            ctx.fs.clone_box(),
+        )),
+        Box::new(FsSkillRegistryRepository::new(ctx.fs.clone_box())),
         Box::new(SystemClock),
     ))
 }
@@ -111,17 +112,16 @@ fn to_source_kind(value: SkillSourceKindArg) -> ApplicationSkillSourceKind {
     }
 }
 
-pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
+pub fn run(command: SkillCommand, presenter: &dyn Presenter, ctx: &CliContext) -> Result<String> {
     match command {
         SkillCommand::Import(args) => {
-            let workspace_root = workspace_root()?;
-            let reg = FsSkillRegistryRepository::new();
+            let reg = FsSkillRegistryRepository::new(ctx.fs.clone_box());
             if matches!(args.kind, SkillSourceKindArg::Local) {
-                let src_dir = workspace_root.join(&args.location);
+                let src_dir = ctx.workspace_root.join(&args.location);
                 let version = args.version.as_deref().unwrap_or("latest");
                 reg.cache_local_source(&args.source_id, version, &src_dir)?;
             }
-            let service = registry_service()?;
+            let service = registry_service(ctx)?;
             service.import_source(ImportSkillSourceCommand {
                 source_id: args.source_id.clone(),
                 kind: to_source_kind(args.kind),
@@ -141,7 +141,7 @@ pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
             Ok(presenter.render_message(&format!("Imported skill source {}", args.source_id)))
         }
         SkillCommand::Show(args) => {
-            let service = registry_service()?;
+            let service = registry_service(ctx)?;
             let skill = service.show_skill(ShowSkillQuery {
                 skill_id: args.skill_id,
             })?;
@@ -150,43 +150,44 @@ pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
                 .unwrap_or_else(|| presenter.render_message("Skill not found.")))
         }
         SkillCommand::Versions(args) => {
-            let service = registry_service()?;
+            let service = registry_service(ctx)?;
             let versions = service.list_skill_versions(ShowSkillQuery {
                 skill_id: args.skill_id,
             })?;
             Ok(presenter.render_skill_versions(&versions))
         }
         SkillCommand::Mount(args) => {
-            let workspace_root = workspace_root()?;
-            let service = task_skill_service()?;
+            let service = task_skill_service(ctx)?;
             let summary = service.mount_skill(MountSkillCommand {
                 task_id: args.task,
                 skill_id: args.skill_id.clone(),
                 version: args.version,
             })?;
 
-            // Copy skill files from global cache to all dot-directories
-            let reg = FsSkillRegistryRepository::new();
+            let reg = FsSkillRegistryRepository::new(ctx.fs.clone_box());
             let version = summary.version.as_str();
             let cache_dir = reg.cache_dir(&args.skill_id, version);
-            if cache_dir.exists() {
+            if ctx.fs.exists(&cache_dir) {
                 for dir in &[".opencode", ".cursor", ".agents", ".claude", ".codex"] {
-                    let mount_dir = workspace_root.join(dir).join("skills").join(&args.skill_id);
-                    fs::create_dir_all(&mount_dir)?;
-                    copy_skill_files(&cache_dir, &mount_dir)?;
+                    let mount_dir = ctx
+                        .workspace_root
+                        .join(dir)
+                        .join("skills")
+                        .join(&args.skill_id);
+                    ctx.fs.create_dir_all(&mount_dir)?;
+                    ctx.fs.copy_dir(&cache_dir, &mount_dir)?;
                 }
             }
 
             Ok(presenter.render_skill_mount(&summary))
         }
         SkillCommand::Mounts(args) => {
-            let service = task_skill_service()?;
-            let mounts =
-                service.list_mounts(&TaskSlug::from(args.task.as_str()))?;
+            let service = task_skill_service(ctx)?;
+            let mounts = service.list_mounts(&TaskSlug::from(args.task.as_str()))?;
             Ok(presenter.render_skill_mounts(&mounts))
         }
         SkillCommand::Unmount(args) => {
-            let service = task_skill_service()?;
+            let service = task_skill_service(ctx)?;
             service.unmount_skill(UnmountSkillCommand {
                 task_id: args.task,
                 mount_id: args.mount_id,
@@ -194,7 +195,7 @@ pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
             Ok(presenter.render_message("Unmounted skill"))
         }
         SkillCommand::CheckUpdates(args) => {
-            let service = task_skill_service()?;
+            let service = task_skill_service(ctx)?;
             let updates = service.check_skill_updates(CheckSkillUpdatesQuery {
                 task_id: args.task,
                 mount_id: args.mount_id,
@@ -203,21 +204,3 @@ pub fn run(command: SkillCommand, presenter: &dyn Presenter) -> Result<String> {
         }
     }
 }
-
-fn copy_skill_files(src: &Utf8PathBuf, dst: &Utf8PathBuf) -> Result<()> {
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let file_type = entry.file_type()?;
-        let name = Utf8PathBuf::from_path_buf(entry.path()).map_err(|_| anyhow!("non-utf8 path"))?;
-        let target = dst.join(name.file_name().unwrap_or_default());
-        if file_type.is_dir() {
-            fs::create_dir_all(&target)?;
-            copy_skill_files(&name, &target)?;
-        } else {
-            fs::copy(entry.path(), &target)?;
-        }
-    }
-    Ok(())
-}
-
-

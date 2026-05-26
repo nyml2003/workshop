@@ -43,19 +43,22 @@ pub struct EditorRegistry {
 impl EditorRegistry {
     pub fn new() -> Self {
         Self {
-            editors: vec![
-                Box::new(editors::Cursor),
-                Box::new(editors::VsCode),
-            ],
+            editors: vec![Box::new(editors::Cursor), Box::new(editors::VsCode)],
         }
     }
 
     pub fn find(&self, name: &str) -> Option<&dyn Editor> {
-        self.editors.iter().find(|e| e.name() == name).map(|e| e.as_ref())
+        self.editors
+            .iter()
+            .find(|e| e.name() == name)
+            .map(|e| e.as_ref())
     }
 
     pub fn find_or_default(&self, name: &str) -> Option<&dyn Editor> {
-        self.editors.len().checked_sub(1).and(self.find(name).or_else(|| self.editors.first().map(|e| e.as_ref())))
+        self.editors.len().checked_sub(1).and(
+            self.find(name)
+                .or_else(|| self.editors.first().map(|e| e.as_ref())),
+        )
     }
 }
 

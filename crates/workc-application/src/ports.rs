@@ -52,6 +52,17 @@ impl Display for EditorError {
 
 impl Error for EditorError {}
 
+pub trait Clock {
+    fn now(&self) -> Timestamp;
+}
+
+pub trait GitClient {
+    fn clone_repo(&self, path: &Utf8Path, url: &str) -> Result<(), GitError>;
+    fn get_repo_status(&self, path: &Utf8Path) -> Result<RepoStatus, GitError>;
+    fn fetch_repo(&self, path: &Utf8Path) -> Result<(), GitError>;
+    fn pull_repo(&self, path: &Utf8Path) -> Result<(), GitError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,15 +88,4 @@ mod tests {
             "fail"
         );
     }
-}
-
-pub trait Clock {
-    fn now(&self) -> Timestamp;
-}
-
-pub trait GitClient {
-    fn clone_repo(&self, path: &Utf8Path, url: &str) -> Result<(), GitError>;
-    fn get_repo_status(&self, path: &Utf8Path) -> Result<RepoStatus, GitError>;
-    fn fetch_repo(&self, path: &Utf8Path) -> Result<(), GitError>;
-    fn pull_repo(&self, path: &Utf8Path) -> Result<(), GitError>;
 }

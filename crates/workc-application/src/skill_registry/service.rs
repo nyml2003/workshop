@@ -1,5 +1,5 @@
-use workc_domain::errors::EntityKind;
 use workc_domain::errors::DomainError;
+use workc_domain::errors::EntityKind;
 use workc_domain::shared::{SkillId, SkillSourceId, SkillVersion};
 use workc_domain::skill_registry::{
     SkillDefinition, SkillRegistryRepository, SkillSource, SkillSourceKind,
@@ -313,13 +313,11 @@ mod tests {
         repo.registry.borrow_mut().skills.push(SkillDefinition {
             id: SkillId::from("frontend-testing"),
             source: SkillSourceId::from("src"),
-            versions: vec![
-                SkillVersion::from("v1"),
-                SkillVersion::from("v2"),
-            ],
+            versions: vec![SkillVersion::from("v1"), SkillVersion::from("v2")],
             latest: Some(SkillVersion::from("v2")),
         });
-        let service = DefaultSkillRegistryApplicationService::new(Box::new(repo), Box::new(FixedClock));
+        let service =
+            DefaultSkillRegistryApplicationService::new(Box::new(repo), Box::new(FixedClock));
         let versions = service
             .list_skill_versions(ShowSkillQuery {
                 skill_id: "frontend-testing".to_owned(),

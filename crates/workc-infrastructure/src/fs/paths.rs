@@ -12,7 +12,10 @@ pub fn workc_home() -> Utf8PathBuf {
         Some(dir) => Utf8PathBuf::from(dir).join(".workc"),
         None => {
             let fallback = dirs_fallback();
-            eprintln!("warning: HOME/USERPROFILE not set, falling back to {}", fallback.display());
+            eprintln!(
+                "warning: HOME/USERPROFILE not set, falling back to {}",
+                fallback.display()
+            );
             Utf8PathBuf::from_path_buf(fallback.join(".workc"))
                 .unwrap_or_else(|_| Utf8PathBuf::from(".workc"))
         }
@@ -68,6 +71,10 @@ mod tests {
         assert!(workc_skills_registry_root().as_str().ends_with("registry"));
         assert!(workc_skills_cache_root().as_str().ends_with("cache"));
         assert!(workc_knowledge_root().as_str().ends_with("knowledge"));
-        assert!(workc_workspaces_path().as_str().ends_with("workspaces.toml"));
+        assert!(
+            workc_workspaces_path()
+                .as_str()
+                .ends_with("workspaces.toml")
+        );
     }
 }
